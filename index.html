@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="가구 프로필을 저장하고 모집공고의 평형별·유형별 실제 물량을 계산하는 청약 전략 계산기">
+  <title>우리집 청약 전략실</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div>
+        <div class="eyebrow">민영주택 · 가구 통합 분석</div>
+        <h1>우리집 청약 전략실</h1>
+        <p>가구 정보는 한 번 저장하고, 모집공고만 바꿔 실제 좌석과 신청 조합을 다시 계산합니다.</p>
+      </div>
+      <div class="privacy"><span>●</span> PDF와 가족정보는 이 기기 안에서만 처리</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <nav class="steps" aria-label="계산 단계">
+      <button class="step active" data-panel="profile"><b>1</b><span>나의 프로필</span><small>한 번 저장</small></button>
+      <button class="step" data-panel="notice"><b>2</b><span>모집공고</span><small>PDF 분석·검수</small></button>
+      <button class="step" data-panel="strategy"><b>3</b><span>좌석·전략</span><small>신청 조합 추천</small></button>
+    </nav>
+
+    <section id="profile" class="panel active">
+      <div class="section-head">
+        <div><span class="kicker">HOUSEHOLD PROFILE</span><h2>나의 청약 프로필</h2></div>
+        <div class="save-state" id="profileSaveState">이 기기에 자동 저장됩니다</div>
+      </div>
+
+      <article class="card profile-type-card">
+        <div class="card-head">
+          <div><h3>법적 혼인·가구 유형</h3><p>공고일 현재 법적 상태를 선택하면 필요한 입력란과 특공 자격을 자동 분기합니다.</p></div>
+          <span id="derivedProfileBadge" class="badge ok">프로필 판정</span>
+        </div>
+        <div class="profile-options">
+          <label><input type="radio" name="profileType" value="single" checked><span><b>미혼·자녀 없음</b><small>1인 가구 포함</small></span></label>
+          <label><input type="radio" name="profileType" value="single_parent"><span><b>미혼·자녀 있음</b><small>한부모 포함</small></span></label>
+          <label><input type="radio" name="profileType" value="engaged"><span><b>혼인 예정·미신고</b><small>예비부부·동거</small></span></label>
+          <label><input type="radio" name="profileType" value="married"><span><b>법률혼</b><small>7년 여부 자동 계산</small></span></label>
+          <label><input type="radio" name="profileType" value="former"><span><b>이혼·사별 등</b><small>현재 법적 배우자 없음</small></span></label>
+        </div>
+        <div class="profile-subfields">
+          <label id="singleHouseholdKindField">1인 가구 세대 유형<select id="singleHouseholdKind"><option value="solo">단독세대 · 전용 60㎡ 이하만</option><option value="not_solo">비단독세대 · 부모 등 세대구성원과 동거</option></select></label>
+          <label id="unmarriedChildRegisteredField" class="checkline is-hidden"><input id="unmarriedChildRegistered" type="checkbox" checked> 미혼 자녀가 신청자 주민등록표등본에 함께 등재됨</label>
+        </div>
+        <div id="profileTypeNote" class="profile-note"></div>
+      </article>
+
+      <div class="grid two">
+        <article class="card">
+          <h3>세대·거주</h3>
+          <label>현재 거주 시·도<input id="residenceRegion" value="서울특별시" placeholder="예: 서울특별시"></label>
+          <label>현재 지역 전입일<input id="residenceStart" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <div class="checks">
+            <label><input id="noHome" type="checkbox" checked> 무주택세대구성원</label>
+            <label><input id="neverHome" type="checkbox" checked> 세대 전원이 과거 주택소유 없음</label>
+            <label><input id="specialClean" type="checkbox" checked> 특별공급 1회 제한 문제 없음</label>
+            <label><input id="reWinClean" type="checkbox" checked> 재당첨·과거 5년 당첨 제한 문제 없음</label>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>혼인·자녀</h3>
+          <div class="form-grid">
+            <label id="marriageDateField">혼인신고일<input id="marriageDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+            <label>출생한 미성년 자녀 수<input id="children" type="number" min="0" value="0"></label>
+            <label>임신 중 태아 수<input id="fetuses" type="number" min="0" value="0"></label>
+            <label>혼인 중 출생·임신한 자녀 수<input id="marriageChildren" type="number" min="0" value="0"></label>
+            <label>영유아 자녀 수<input id="infants" type="number" min="0" value="0"></label>
+            <label>막내 출생일<input id="youngestBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          </div>
+          <div class="checks">
+            <label><input id="assetOk" type="checkbox" checked> 공고문상 부동산 자산기준 충족</label>
+          </div>
+          <div id="childCountSummary" class="calc-summary"></div>
+          <p class="hint">태아는 특공의 자녀 수와 소득 가구원 수에는 포함하지만, 일반공급 부양가족은 주민등록표 기준으로 별도 판정합니다.</p>
+        </article>
+      </div>
+
+      <article class="card income-card">
+        <div class="card-head">
+          <div><h3>도시근로자 월평균소득 자동 계산</h3><p>월계 공고문에 실린 2025년도 기준표를 고정 적용합니다.</p></div>
+          <span class="badge ok">2025 소득표</span>
+        </div>
+        <div class="form-grid four">
+          <label>소득 산정 가구원 수<input id="householdSize" type="number" min="1" value="1"></label>
+          <label>가구원 수 자동 제안<select id="householdSizeAuto"><option value="yes">자동 계산</option><option value="no">직접 입력</option></select></label>
+          <label>신청자 A 월소득<input id="aMonthlyIncome" type="number" min="0" step="10000" value="0"><span class="suffix">원</span></label>
+          <label id="bIncomeField">신청자 B 월소득<input id="bMonthlyIncome" type="number" min="0" step="10000" value="0"><span class="suffix">원</span></label>
+        </div>
+        <div id="incomeSummary" class="income-summary"></div>
+        <p class="hint">입력 월소득은 공고문이 요구하는 전년도 소득자료 기준으로 맞춰야 합니다. 실제 심사에는 세대구성원별 소득자료와 자산요건이 함께 적용됩니다.</p>
+      </article>
+
+      <div class="grid two people">
+        <article class="card person person-a">
+          <div class="person-title"><span>A</span><h3>신청자 A</h3></div>
+          <div class="form-grid">
+            <label>청약통장 가입일<input id="aAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+            <label>일반공급 가점<input id="aGeneralScore" type="number" min="0" max="84" value="52"></label>
+            <label>다자녀 배점<input id="aMultiScore" type="number" min="0" max="100" value="75"></label>
+            <label>생년월일<input id="aBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          </div>
+          <div class="checks compact">
+            <label><input id="aHead" type="checkbox" checked> 세대주</label>
+            <label><input id="aDeposit" type="checkbox" checked> 지역·면적별 예치금 충족</label>
+            <label><input id="aTax5" type="checkbox" checked> 소득세 5년 이상</label>
+            <label><input id="aElder3" type="checkbox"> 65세 이상 직계존속 3년 부양</label>
+            <label><input id="aElderNoHome" type="checkbox"> 피부양 노부모 부부 모두 무주택</label>
+            <label><input id="aAgency" type="checkbox"> 기관추천 대상 확인 완료</label>
+          </div>
+        </article>
+
+        <article id="personBCard" class="card person person-b">
+          <div class="person-title"><span>B</span><h3 id="personBTitle">신청자 B</h3></div>
+          <div class="form-grid">
+            <label>청약통장 가입일<input id="bAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+            <label>일반공급 가점<input id="bGeneralScore" type="number" min="0" max="84" value="48"></label>
+            <label>다자녀 배점<input id="bMultiScore" type="number" min="0" max="100" value="75"></label>
+            <label>생년월일<input id="bBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          </div>
+          <div class="checks compact">
+            <label><input id="bHead" type="checkbox"> 세대주</label>
+            <label><input id="bDeposit" type="checkbox" checked> 지역·면적별 예치금 충족</label>
+            <label><input id="bTax5" type="checkbox" checked> 소득세 5년 이상</label>
+            <label><input id="bElder3" type="checkbox"> 65세 이상 직계존속 3년 부양</label>
+            <label><input id="bElderNoHome" type="checkbox"> 피부양 노부모 부부 모두 무주택</label>
+            <label><input id="bAgency" type="checkbox"> 기관추천 대상 확인 완료</label>
+          </div>
+        </article>
+      </div>
+      <div class="actions end"><button class="primary" data-go="notice">저장하고 모집공고 넣기 →</button></div>
+    </section>
+
+    <section id="notice" class="panel">
+      <div class="section-head">
+        <div><span class="kicker">ANNOUNCEMENT</span><h2>모집공고 불러오기</h2></div>
+        <div id="verifiedBadge" class="badge warn">검수 필요</div>
+      </div>
+
+      <div class="import-card">
+        <div>
+          <strong>입주자모집공고 PDF</strong>
+          <p>단지명, 공고일, 실제 전용면적, 평형별 특별·일반공급 물량을 자동으로 읽습니다.</p>
+        </div>
+        <label class="file-button">PDF 선택<input id="pdfFile" type="file" accept="application/pdf,.pdf"></label>
+        <div id="parseStatus" class="parse-status">현재 월계 중흥S-클래스 예시가 들어 있습니다.</div>
+      </div>
+
+      <div class="notice-toolbar">
+        <label>저장된 공고<select id="noticeLibrary"></select></label>
+        <button id="blankNotice" class="ghost">빈 공고 만들기</button>
+        <button id="saveNotice" class="ghost">현재 공고 저장</button>
+        <button id="exportNotice" class="ghost">JSON 내보내기</button>
+        <label class="ghost file-inline">JSON 불러오기<input id="jsonFile" type="file" accept=".json,application/json"></label>
+      </div>
+
+      <article class="card">
+        <h3>공고 핵심정보</h3>
+        <div class="form-grid four">
+          <label>단지명<input id="projectName"></label>
+          <label>입주자모집공고일<input id="noticeDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>공급지역<input id="location"></label>
+          <label>주택유형<select id="housingType"><option value="private">민영주택</option><option value="public">국민·공공주택</option><option value="unsupported">기타/검토 필요</option></select></label>
+          <label>지역우선 기준지역<input id="priorityRegion" placeholder="예: 서울특별시"></label>
+          <label>지역우선 거주기간<input id="priorityYears" type="number" min="0" step=".5" value="2"><span class="suffix">년</span></label>
+          <label>특공 통장 최소기간<input id="specialMonths" type="number" min="0" value="6"><span class="suffix">개월</span></label>
+          <label>일반 1순위 통장기간<input id="generalMonths" type="number" min="0" value="24"><span class="suffix">개월</span></label>
+          <label>일반 1순위 세대주 요건<select id="generalHeadRequired"><option value="yes">세대주 필요</option><option value="no">세대원도 가능</option></select></label>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div><h3>평형별 공급물량</h3><p>자동 추출값을 공고문 표와 한 번 대조해 주세요.</p></div>
+          <button id="addSize" class="ghost">+ 평형 추가</button>
+        </div>
+        <div class="table-wrap"><table class="supply-table">
+          <thead><tr><th>주택형</th><th>실제 전용㎡</th><th>총</th><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>일반</th><th></th></tr></thead>
+          <tbody id="supplyRows"></tbody>
+          <tfoot id="supplyTotal"></tfoot>
+        </table></div>
+      </article>
+
+      <article class="card rule-card">
+        <div class="card-head">
+          <div><h3>일반공급 가점제 비율</h3><p>공고문·규제지역 판정을 우선하며 자동값은 반드시 확인합니다.</p></div>
+          <span class="law-date">기준: 공고일 적용 규칙</span>
+        </div>
+        <div class="rate-grid">
+          <label>60㎡ 이하<input id="pointRateSmall" type="number" min="0" max="100" value="40"><span class="suffix">%</span></label>
+          <label>60㎡ 초과~85㎡ 이하<input id="pointRateMedium" type="number" min="0" max="100" value="70"><span class="suffix">%</span></label>
+          <label>85㎡ 초과<input id="pointRateLarge" type="number" min="0" max="100" value="80"><span class="suffix">%</span></label>
+        </div>
+        <p class="formula">가점 좌석 = 올림(일반공급 × 가점비율) · 추첨 좌석 = 나머지 · 추첨 중 무주택 우선 = 올림(추첨 × 75%)</p>
+      </article>
+
+      <div class="actions split">
+        <button class="ghost" data-go="profile">← 프로필 정보</button>
+        <button id="confirmNotice" class="primary">숫자 검수 완료하고 좌석 계산 →</button>
+      </div>
+    </section>
+
+    <section id="strategy" class="panel">
+      <div class="section-head">
+        <div><span class="kicker">SEAT & STRATEGY</span><h2>실제 좌석과 가구 전략</h2></div>
+        <button class="ghost" data-go="notice">공고 수정</button>
+      </div>
+
+      <div class="strategy-settings card">
+        <label>최소 전용면적<input id="minArea" type="number" min="0" value="36"><span class="suffix">㎡</span></label>
+        <label>전략 성향<select id="mode"><option value="probability">당첨기회 우선</option><option value="balance" selected>실거주·기회 균형</option><option value="quality">면적 우선</option></select></label>
+        <label id="bothApplyField" class="checkline"><input id="bothApply" type="checkbox" checked> 신청자 A·B 모두 신청</label>
+        <label class="checkline"><input id="allowSpecialGeneral" type="checkbox" checked> 각자 특공+일반 동시신청</label>
+        <label class="checkline"><input id="diversify" type="checkbox" checked> 신청자간 평형 분산</label>
+        <button id="calculate" class="primary">전략 다시 계산</button>
+      </div>
+
+      <div id="strategyWarning"></div>
+      <div id="recommendation"></div>
+
+      <article class="card result-card">
+        <div class="card-head"><div><span class="kicker">GENERAL SUPPLY</span><h3>일반공급 실제 좌석</h3></div><span class="rounding">소수점 올림 반영</span></div>
+        <div id="generalSeats" class="table-wrap"></div>
+      </article>
+
+      <article class="card result-card">
+        <div class="card-head"><div><span class="kicker">SPECIAL SUPPLY</span><h3>특별공급 단계별 실제 좌석</h3></div><span class="rounding">50% → 20% → 나머지</span></div>
+        <div id="specialSeats" class="table-wrap"></div>
+      </article>
+
+      <div class="grid two">
+        <article class="card result-card"><h3>신청자별 신청 후보 순위</h3><div id="candidateTable" class="table-wrap"></div></article>
+        <article class="card result-card"><h3>자격 체크</h3><div id="eligibilityTable" class="table-wrap"></div></article>
+      </div>
+
+      <details class="legal-note">
+        <summary>계산 원칙과 꼭 확인할 점</summary>
+        <div>
+          <p>이 계산기는 모집공고 물량을 법정 비율로 좌석화하고 상대적인 전략 우선순위를 비교합니다. 경쟁률이나 실제 당첨확률을 예측하지 않습니다.</p>
+          <p>특별공급 각 단계의 미달 좌석과 낙첨자는 다음 단계로 넘어가므로 실제 접수결과에 따라 후속 단계 좌석은 늘 수 있습니다. 최종 신청 전 청약Home과 사업주체에 자격을 확인하세요.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./rules.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

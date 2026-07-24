@@ -1,0 +1,9 @@
+{
+  "name": "housing-subscription-strategy",
+  "version": "3.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build-site.mjs",
+    "test": "node rules.test.js"
+  }
+}
