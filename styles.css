@@ -7,7 +7,7 @@ button,input,select{font:inherit}button{cursor:pointer}
 .eyebrow,.kicker{font-size:11px;letter-spacing:.14em;font-weight:900;text-transform:uppercase}.eyebrow{color:var(--lime)}
 h1{font-size:38px;margin:7px 0 8px;letter-spacing:-.045em}.hero p{margin:0;color:#d7e5dc;line-height:1.6}
 .privacy{font-size:12px;color:#d7e5dc;border:1px solid #ffffff36;border-radius:99px;padding:9px 13px;white-space:nowrap}.privacy span{color:var(--lime)}
-.shell{max-width:1240px;margin:auto;padding:0 24px 70px}.steps{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;margin:-1px 0 28px;border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;overflow:hidden}
+.shell{max-width:1240px;margin:auto;padding:0 24px 70px}.steps{display:grid;grid-template-columns:repeat(4,1fr);background:#fff;margin:-1px 0 28px;border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;overflow:hidden}
 .step{border:0;border-right:1px solid var(--line);background:#fff;padding:17px 20px;display:grid;grid-template-columns:35px 1fr;grid-template-rows:1fr 1fr;text-align:left;color:var(--muted)}
 .step:last-child{border-right:0}.step b{grid-row:1/3;width:28px;height:28px;border-radius:50%;background:#eef1ec;display:grid;place-items:center;color:var(--muted)}.step span{font-weight:900;color:var(--ink)}.step small{font-size:11px}
 .step.active{background:var(--green2)}.step.active b{background:var(--green);color:#fff}.step.active span{color:var(--green)}
@@ -87,3 +87,17 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .stage-checks i.person-b{background:#6846a5}
 .strategy-reason{display:block;margin-top:7px;color:#cdd9d2;font-size:11px;line-height:1.55;white-space:normal;max-width:360px}
 .application{align-items:flex-start}.application>div{min-width:0}.application b{min-width:120px}
+.finance-source-card{border-left:5px solid var(--orange)}
+.finance-source-card h4{margin:18px 0 10px}.finance-source-card h4:first-of-type{margin-top:10px}
+.payment-schedule-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}.payment-schedule-head h4{margin:0}
+.payment-source-table input,.payment-source-table select{min-width:112px;margin:0;padding:7px}.payment-source-table input[type="number"]{text-align:right}.payment-source-table .date-control{min-width:175px}.payment-source-table .calendar-button{margin-top:0;min-height:33px}
+.funding-input-card{border-top:5px solid var(--orange)}
+.funding-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;margin-top:8px}.funding-button{margin-top:18px}
+.funding-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:16px 0}
+.funding-summary>div{display:flex;flex-direction:column;gap:6px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:var(--shadow)}
+.funding-summary span{font-size:11px;font-weight:900;color:var(--muted)}.funding-summary b{font-size:20px}.funding-summary small{color:var(--muted);font-size:10px;font-weight:700}
+.funding-summary .funding-safe{background:#e7f3ec;border-color:#bfddcc}.funding-summary .funding-safe b{color:var(--green)}
+.funding-summary .funding-risk{background:#fdeaea;border-color:#efc1c1}.funding-summary .funding-risk b{color:var(--red)}
+.funding-row-short td{background:#fff2f2}.money-negative{color:var(--red);font-weight:950}.funding-status{text-align:center}.funding-status .eligibility-mark{width:24px;height:24px;font-size:13px;margin:0}.funding-status small{display:block;margin-top:4px;color:var(--red);font-weight:900}
+@media(max-width:1100px){.funding-grid{grid-template-columns:repeat(3,1fr)}.funding-summary{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.steps{grid-template-columns:repeat(4,1fr)}.step{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}.step b{flex:none}.step span{font-size:10px;line-height:1.2}.funding-grid,.funding-summary{grid-template-columns:1fr}.payment-schedule-head{align-items:flex-end}.payment-source-table .date-control{min-width:160px}}

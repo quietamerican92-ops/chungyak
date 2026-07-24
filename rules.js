@@ -50,6 +50,113 @@
     return [1,2,3].filter(stage=>stage>=first&&integer(allocation?.[`stage${stage}`])>0);
   }
 
+  function parsePaymentData(lines,sizeNames=[]){
+    const clean=(lines||[]).map(line=>String(line||"").replace(/[–—]/g,"-").replace(/\s+/g," ").trim()).filter(Boolean);
+    const start=clean.findIndex(line=>/공급금액.*납부일정|분양대금.*납부일정/.test(line));
+    if(start<0)return {pricing:[],payments:[],confidence:0};
+    const section=clean.slice(start,start+180);
+    const header=section.slice(0,14).join(" ");
+    const rate=(label,fallback)=>{
+      const match=header.match(new RegExp(label+"\\s*\\(?\\s*(\\d+(?:\\.\\d+)?)\\s*%"));
+      return match?Number(match[1]):fallback;
+    };
+    const contractRate=rate("계약금",10),interimTotal=rate("중도금",60),balanceRate=rate("잔금",30);
+    const installmentRates=[...header.matchAll(/\d+차\s*\(\s*(\d+(?:\.\d+)?)\s*%\s*\)/g)].map(match=>Number(match[1]));
+    const dates=[...header.matchAll(/(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/g)].map(match=>normalizeDate(`${match[1]}-${match[2]}-${match[3]}`)).filter(Boolean);
+    const count=Math.max(installmentRates.length,dates.length,interimTotal?1:0);
+    const perRate=count?interimTotal/count:0;
+    const payments=[{kind:"contract",label:"계약금",rate:contractRate,dueDate:"",dueLabel:"계약 시"}];
+    for(let index=0;index<count;index++)payments.push({kind:"interim",label:`중도금 ${index+1}차`,rate:installmentRates[index]??perRate,dueDate:dates[index]||"",dueLabel:dates[index]?"":"공고문 확인"});
+    payments.push({kind:"balance",label:"잔금",rate:balanceRate,dueDate:"",dueLabel:"입주 지정일"});
+
+    const orderedSizes=[];
+    (sizeNames||[]).forEach(item=>{
+      const size=typeof item==="object"?String(item.name||item.size||""):String(item);
+      if(size&&!orderedSizes.some(row=>row.size===size))orderedSizes.push({size,total:typeof item==="object"?integer(item.total):0});
+    });
+    const orderedNames=orderedSizes.map(row=>row.size);
+    const names=[...orderedNames].sort((a,b)=>b.length-a.length);
+    const moneyValues=line=>[...line.matchAll(/\d{1,3}(?:,\d{3}){2,}|\b\d{9,}\b/g)].map(match=>Number(match[0].replace(/,/g,""))).filter(value=>value>=10000000&&value<=10000000000);
+    const near=(value,target)=>Math.abs(value-target)<=Math.max(1000,target*.002);
+    const entries=section.map((line,lineIndex)=>{
+      const amounts=moneyValues(line);
+      const price=amounts.find(candidate=>amounts.some(value=>near(value,candidate*.1))&&amounts.some(value=>near(value,candidate*.3)));
+      const unitMatch=line.match(/(?:\d+(?:~|-)\d+층|\d+층)\s+(\d+)/);
+      return price?{line,lineIndex,price,units:unitMatch?integer(unitMatch[1]):0}:null;
+    }).filter(Boolean);
+    const options=new Map(orderedNames.map(name=>[name,new Set()]));
+    if(orderedSizes.length&&orderedSizes.every(row=>row.total>0)&&entries.some(row=>row.units>0)){
+      let cursor=0;
+      orderedSizes.forEach((size,sizeIndex)=>{
+        let assignedUnits=0;
+        while(cursor<entries.length&&(assignedUnits<size.total||sizeIndex===orderedSizes.length-1)){
+          const entry=entries[cursor++];
+          options.get(size.size)?.add(entry.price);
+          assignedUnits+=entry.units;
+          if(sizeIndex<orderedSizes.length-1&&assignedUnits>=size.total)break;
+        }
+      });
+    }else{
+      let currentSize="";
+      section.forEach(line=>{
+        const foundName=names.find(name=>new RegExp(`(?:^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?:\\s|$)`).test(line));
+        if(foundName)currentSize=foundName;
+        if(!currentSize)return;
+        const amounts=moneyValues(line);
+        const price=amounts.find(candidate=>amounts.some(value=>near(value,candidate*.1))&&amounts.some(value=>near(value,candidate*.3)));
+        if(price)options.get(currentSize)?.add(price);
+      });
+    }
+    const pricing=orderedNames.map(size=>{
+      const values=[...(options.get(size)||[])].sort((a,b)=>a-b);
+      return {size,min:values[0]||0,max:values.at(-1)||0,options:values};
+    }).filter(row=>row.max>0);
+    const confidence=Math.min(100,(dates.length?35:0)+(pricing.length?45:0)+(payments.length>=3?20:0));
+    return {pricing,payments,confidence};
+  }
+
+  function buildFundingPlan(input){
+    const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
+    const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
+    const interimLoanRate=clamp(Number(input.interimLoanRate)||0,0,100),mortgageLtv=clamp(Number(input.mortgageLtv)||0,0,100);
+    const mortgageTarget=Math.round(price*mortgageLtv/100);
+    const source=(input.payments||[]).map((payment,index)=>({...payment,index,rate:Number(payment.rate)||0}));
+    const resolved=source.map(payment=>{
+      const dueDate=normalizeDate(payment.dueDate)||(payment.kind==="contract"?contractDate:payment.kind==="balance"?moveInDate:"");
+      return {...payment,dueDate,dueText:dueDate||payment.dueLabel||"날짜 확인"};
+    }).sort((a,b)=>a.dueDate&&b.dueDate?a.dueDate.localeCompare(b.dueDate):a.dueDate?-1:b.dueDate?1:a.index-b.index);
+    let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0;
+    const usableStart=Math.max(0,cashNow-reserve);
+    const rows=resolved.map(payment=>{
+      const scheduled=Math.round(price*payment.rate/100);
+      let gross=scheduled,financing=0,own=scheduled,note="자기자금 납부";
+      if(payment.kind==="interim"){
+        financing=Math.round(scheduled*interimLoanRate/100);
+        own=scheduled-financing;
+        interimOutstanding+=financing;
+        peakInterim=Math.max(peakInterim,interimOutstanding);
+        note=`중도금 대출 ${interimLoanRate.toFixed(0)}% 가정`;
+      }else if(payment.kind==="balance"){
+        const closingNeed=scheduled+interimOutstanding;
+        financing=Math.min(closingNeed,mortgageTarget);
+        own=Math.max(0,closingNeed-financing)+extras;
+        gross=scheduled+extras;
+        note=`주담대에서 중도금 대출 ${interimOutstanding.toLocaleString("ko-KR")}원 상환 포함`;
+        interimOutstanding=0;
+      }
+      const elapsedMonths=baseDate&&payment.dueDate?Math.max(0,Math.floor(monthsBetween(baseDate,payment.dueDate)+1e-6)):0;
+      const accumulatedSaving=monthlySaving*elapsedMonths;
+      const cashBefore=usableStart+accumulatedSaving-cumulativeOwn;
+      const cashAfter=cashBefore-own;
+      cumulativeOwn+=own;
+      const shortage=Math.max(0,-cashAfter);
+      if(shortage&&!firstShortage)firstShortage={label:payment.label,dueText:payment.dueText,shortage};
+      worstShortage=Math.max(worstShortage,shortage);
+      return {...payment,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note};
+    });
+    return {price,extras,totalCost:price+extras,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,mortgageLtv,mortgageTarget,peakInterim,totalOwn:rows.reduce((total,row)=>total+row.own,0),worstShortage,firstShortage,rows,rateTotal:source.reduce((total,row)=>total+row.rate,0)};
+  }
+
   function normalizeDate(value){
     const raw=String(value||"").trim();
     if(!raw)return "";
@@ -258,7 +365,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

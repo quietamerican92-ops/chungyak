@@ -71,4 +71,28 @@ assert.strictEqual(R.normalizeDate("2026.07.16"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("20260716"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("2026-02-30"),"");
 
-console.log("rules.test.js: allocation, scoring, income, profile and date checks passed");
+const paymentFixture=[
+  "■ 공급금액 및 납부일정 (단위 : 원)",
+  "계약금 (10%) 중도금(60%) 잔금(30%)",
+  "1차(10%) 2차(10%) 3차(10%) 4차(10%) 5차(10%) 6차(10%) 입주",
+  "계약시 2027.01.30. 2027.05.31. 2027.10.29. 2028.03.30. 2028.08.30. 2029.01.30. 지정일",
+  "36 20 5~9층 6 395,560,000 286,440,000 682,000,000 68,200,000 68,200,000 68,200,000 68,200,000 68,200,000 68,200,000 68,200,000 204,600,000",
+  "10~14층 9 401,592,000 290,808,000 692,400,000 69,240,000 69,240,000 69,240,000 69,240,000 69,240,000 69,240,000 69,240,000 207,720,000",
+  "15~19층 5 403,622,000 292,278,000 695,900,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 208,770,000",
+  "59A 71 2층 7 688,866,000 498,834,000 1,187,700,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 356,310,000"
+];
+const parsedPayments=R.parsePaymentData(paymentFixture,[{name:"36",total:20},{name:"59A",total:71}]);
+assert.deepStrictEqual(parsedPayments.payments.map(row=>row.rate),[10,10,10,10,10,10,10,30]);
+assert.strictEqual(parsedPayments.payments[1].dueDate,"2027-01-30");
+assert.deepStrictEqual(parsedPayments.pricing.map(row=>({size:row.size,min:row.min,max:row.max})),[
+  {size:"36",min:682000000,max:695900000},{size:"59A",min:1187700000,max:1187700000}
+]);
+const billionSchedule=[{kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},...Array.from({length:6},(_,index)=>({kind:"interim",label:`중도금 ${index+1}차`,rate:10,dueDate:`2027-0${index+1}-01`,dueLabel:""})),{kind:"balance",label:"잔금",rate:30,dueDate:"",dueLabel:"입주 지정일"}];
+const funding=R.buildFundingPlan({baseDate:"2026-01-01",price:1000000000,extras:0,cashNow:200000000,reserve:50000000,monthlySaving:0,contractDate:"2026-08-01",moveInDate:"2029-05-01",interimLoanRate:100,mortgageLtv:40,payments:billionSchedule});
+assert.strictEqual(funding.mortgageTarget,400000000);
+assert.strictEqual(funding.peakInterim,600000000);
+assert.strictEqual(funding.totalOwn,600000000);
+assert.strictEqual(funding.worstShortage,450000000);
+assert.strictEqual(funding.firstShortage.label,"잔금");
+
+console.log("rules.test.js: allocation, scoring, income, profile, payment parsing and funding checks passed");

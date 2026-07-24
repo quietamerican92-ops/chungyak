@@ -13,7 +13,7 @@
       <div>
         <div class="eyebrow">민영주택 · 가구 통합 분석</div>
         <h1>우리집 청약 전략실</h1>
-        <p>가구 정보는 한 번 저장하고, 모집공고만 바꿔 실제 물량과 신청 조합을 다시 계산합니다.</p>
+        <p>가구 정보는 한 번 저장하고, 모집공고만 바꿔 청약 전략과 계약 이후 자금일정까지 다시 계산합니다.</p>
       </div>
       <div class="privacy"><span>●</span> PDF와 가족정보는 이 기기 안에서만 처리</div>
     </div>
@@ -24,6 +24,7 @@
       <button class="step active" data-panel="profile"><b>1</b><span>나의 프로필</span><small>한 번 저장</small></button>
       <button class="step" data-panel="notice"><b>2</b><span>모집공고</span><small>PDF 분석·검수</small></button>
       <button class="step" data-panel="strategy"><b>3</b><span>물량·전략</span><small>신청 조합 추천</small></button>
+      <button class="step" data-panel="finance"><b>4</b><span>자금 플랜</span><small>계약금·중도금·잔금</small></button>
     </nav>
 
     <section id="profile" class="panel active">
@@ -157,7 +158,7 @@
       <div class="import-card">
         <div>
           <strong>입주자모집공고 PDF</strong>
-          <p>단지명, 공고일, 실제 전용면적, 평형별 특별·일반공급 물량을 자동으로 읽습니다.</p>
+          <p>단지명, 공고일, 공급물량과 함께 분양가·계약금·중도금·잔금 일정을 자동으로 읽습니다.</p>
         </div>
         <label class="file-button">PDF 선택<input id="pdfFile" type="file" accept="application/pdf,.pdf"></label>
         <div id="parseStatus" class="parse-status">현재 월계 중흥S-클래스 예시가 들어 있습니다.</div>
@@ -198,6 +199,24 @@
         </table></div>
       </article>
 
+      <article class="card finance-source-card">
+        <div class="card-head">
+          <div><h3>분양가·납부일정</h3><p>자동 추출값을 공고문의 공급금액 및 납부일정 표와 대조해 주세요. 분양가는 층별 최저·최고값입니다.</p></div>
+          <span id="paymentExtractBadge" class="badge warn">검수 필요</span>
+        </div>
+        <h4>주택형별 분양가</h4>
+        <div class="table-wrap"><table class="payment-source-table">
+          <thead><tr><th>주택형</th><th>최저 분양가</th><th>최고 분양가</th><th>가격 경우의 수</th></tr></thead>
+          <tbody id="priceRows"></tbody>
+        </table></div>
+        <div class="payment-schedule-head"><h4>대금 납부일정</h4><button id="addPayment" class="ghost">+ 납부회차 추가</button></div>
+        <div class="table-wrap"><table class="payment-source-table">
+          <thead><tr><th>구분</th><th>회차명</th><th>비율</th><th>납부일</th><th>공고문 표현</th><th></th></tr></thead>
+          <tbody id="paymentRows"></tbody>
+          <tfoot id="paymentTotal"></tfoot>
+        </table></div>
+        <p class="hint">날짜는 직접 입력하거나 달력으로 선택할 수 있습니다. ‘계약 시’와 ‘입주 지정일’은 자금 플랜에서 예상일을 넣어 계산합니다.</p>
+      </article>
       <article class="card rule-card">
         <div class="card-head">
           <div><h3>일반공급 가점제 비율</h3><p>공고문·규제지역 판정을 우선하며 자동값은 반드시 확인합니다.</p></div>
@@ -257,6 +276,49 @@
           <p>특별공급 각 단계의 미달 물량과 낙첨자는 다음 단계로 넘어가므로 실제 접수결과에 따라 후속 단계 물량은 늘 수 있습니다. 최종 신청 전 청약Home과 사업주체에 자격을 확인하세요.</p>
         </div>
       </details>
+      <div class="actions split"><button class="ghost" data-go="notice">← 공고 수정</button><button class="primary" data-go="finance">계약 이후 자금 플랜 →</button></div>
+    </section>
+
+    <section id="finance" class="panel">
+      <div class="section-head">
+        <div><span class="kicker">FUNDING PLAN</span><h2>계약금·중도금·잔금 자금 플랜</h2></div>
+        <button class="ghost" data-go="notice">납부일정 수정</button>
+      </div>
+
+      <div id="financeWarning"></div>
+
+      <article class="card funding-input-card">
+        <div class="card-head"><div><h3>가정 입력</h3><p>당첨될 주택형과 예상 대출조건을 보수적으로 입력하세요.</p></div><span class="rounding">기기 안에 자동 저장</span></div>
+        <div class="funding-grid">
+          <label>선택 주택형<select id="planSize"></select></label>
+          <label>계산 기준 분양가<input id="planPrice" type="number" min="0" step="1000000"><span class="suffix">원</span><small class="field-help">기본값은 해당 평형 최고 분양가</small></label>
+          <label>발코니·옵션·취득비용<input id="planExtras" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
+          <label>현재 가용현금<input id="cashNow" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
+          <label>남겨둘 비상예비자금<input id="cashReserve" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
+          <label>월 추가저축 가능액<input id="monthlySaving" type="number" min="0" step="100000" value="0"><span class="suffix">원</span></label>
+          <label>예상 계약일<input id="contractDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>예상 입주·잔금일<input id="moveInDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>중도금 회차별 대출비율<input id="interimLoanRate" type="number" min="0" max="100" value="0"><span class="suffix">%</span><small class="field-help">협약은행 확인 전에는 0%로 보수 계산</small></label>
+          <label>입주시 예상 주담대 LTV<input id="mortgageLtv" type="number" min="0" max="100" value="0"><span class="suffix">%</span><small class="field-help">은행 사전상담 결과를 직접 입력</small></label>
+        </div>
+        <button id="calculateFunding" class="primary funding-button">자금 플랜 다시 계산</button>
+      </article>
+
+      <div id="fundingSummary" class="funding-summary"></div>
+
+      <article class="card result-card">
+        <div class="card-head"><div><h3>날짜별 자금 타임라인</h3><p>중도금 대출은 입주 시 주담대로 상환·전환되는 것으로 단순 계산합니다.</p></div><span class="rounding">부족 시점 자동 표시</span></div>
+        <div id="fundingTimeline" class="table-wrap"></div>
+      </article>
+
+      <details class="legal-note" open>
+        <summary>자금 플랜에서 반드시 확인할 점</summary>
+        <div>
+          <p>입력한 LTV는 예상치이며 실제 대출가능액은 담보평가액, DSR, 소득, 기존대출, 금융기관 심사와 규제에 따라 달라집니다.</p>
+          <p>중도금대출은 보장되지 않으며 이자·보증료·인지세·취득세·등기비용은 자동 추정하지 않습니다. 예상 부대비용란에 별도로 포함하세요.</p>
+        </div>
+      </details>
+      <div class="actions split"><button class="ghost" data-go="strategy">← 청약 전략</button><button class="ghost" data-go="notice">공고 숫자 다시 확인</button></div>
     </section>
   </main>
 
