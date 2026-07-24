@@ -14,11 +14,11 @@ assert.deepStrictEqual(R.specialAllocation(6),{total:6,stage1:3,stage2:2,stage3:
 assert.deepStrictEqual(R.specialAllocation(1),{total:1,stage1:1,stage2:0,stage3:0,firstRate:50,secondRate:20});
 
 const marriedProfile={
-  profileType:"married",marriageDate:"2022-07-01",children:1,fetuses:1,householdSize:4,assetOk:true,
+  profileType:"married",marriageDate:"2022-07-01",children:1,fetuses:1,infants:0,residenceStart:"2010-01-01",householdSize:4,assetOk:true,
   noHome:true,neverHome:true,specialClean:true,reWinClean:true,youngestBirth:"2025-08-01",
   people:{
-    a:{account:"2020-01-01",generalScore:52,multiScore:75,monthlyIncome:5000000,head:true,deposit:true,tax5:true,elder3:false,elderNoHome:false,agency:false},
-    b:{account:"2020-01-01",generalScore:48,multiScore:75,monthlyIncome:4000000,head:false,deposit:true,tax5:true,elder3:false,elderNoHome:false,agency:false}
+    a:{account:"2020-01-01",birth:"1990-01-01",otherDependents:0,monthlyIncome:5000000,head:true,deposit:true,tax5:true,elder3:false,elderNoHome:false,agency:false,threeGeneration:false,singleParent5:false},
+    b:{account:"2020-01-01",birth:"1992-01-01",otherDependents:0,monthlyIncome:4000000,head:false,deposit:true,tax5:true,elder3:false,elderNoHome:false,agency:false,threeGeneration:false,singleParent5:false}
   }
 };
 const notice={noticeDate:"2026-07-16",specialMonths:6,generalMonths:24,generalHeadRequired:"yes"};
@@ -34,6 +34,18 @@ assert.strictEqual(R.incomeStage("newly",marriedProfile).stage,1);
 assert.strictEqual(R.eligibility("a",marriedProfile,notice).multi.ok,true);
 assert.strictEqual(R.eligibility("a",marriedProfile,notice).newly.ok,true);
 assert.strictEqual(R.eligibility("a",marriedProfile,notice).newly.newlyRank,2);
+const generalA=R.generalScore("a",marriedProfile,notice);
+assert.deepStrictEqual({total:generalA.points,noHome:generalA.noHomePoints,dependents:generalA.dependentPoints,account:generalA.accountPoints},{total:40,noHome:14,dependents:15,account:11});
+const multiA=R.multiScore("a",marriedProfile,notice);
+assert.deepStrictEqual({total:multiA.points,children:multiA.childPoints,infants:multiA.infantPoints,noHome:multiA.noHomePoints,residence:multiA.residencePoints,account:multiA.accountPoints},{total:65,children:25,infants:5,noHome:20,residence:15,account:0});
+const cappedAccountProfile=JSON.parse(JSON.stringify(marriedProfile));
+cappedAccountProfile.people.a.account="2000-01-01";
+assert.strictEqual(R.generalScore("a",cappedAccountProfile,notice).accountPoints,17);
+const maxScoreProfile=JSON.parse(JSON.stringify(marriedProfile));
+maxScoreProfile.children=4;maxScoreProfile.fetuses=0;maxScoreProfile.infants=3;maxScoreProfile.residenceStart="2000-01-01";
+maxScoreProfile.people.a.birth="1970-01-01";maxScoreProfile.people.a.account="2000-01-01";maxScoreProfile.people.a.otherDependents=1;maxScoreProfile.people.a.threeGeneration=true;
+assert.strictEqual(R.generalScore("a",maxScoreProfile,notice).points,84);
+assert.strictEqual(R.multiScore("a",maxScoreProfile,notice).points,100);
 
 const singleProfile=JSON.parse(JSON.stringify(marriedProfile));
 singleProfile.profileType="single";singleProfile.singleHouseholdKind="solo";
@@ -48,4 +60,4 @@ assert.strictEqual(R.normalizeDate("2026.07.16"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("20260716"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("2026-02-30"),"");
 
-console.log("rules.test.js: allocation, income, profile and date checks passed");
+console.log("rules.test.js: allocation, scoring, income, profile and date checks passed");

@@ -34,14 +34,14 @@
   };
 
   const PROFILE_IDS=[
-    "residenceRegion","residenceStart","noHome","neverHome","specialClean","reWinClean",
+    "residenceRegion","residenceStart","lastHomeDisposal","noHome","neverHome","specialClean","reWinClean",
     "singleHouseholdKind","unmarriedChildRegistered","marriageDate","children","fetuses","marriageChildren","infants","youngestBirth","assetOk",
     "householdSize","householdSizeAuto","aMonthlyIncome","bMonthlyIncome",
-    "aAccount","aGeneralScore","aMultiScore","aBirth","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency",
-    "bAccount","bGeneralScore","bMultiScore","bBirth","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency",
+    "aAccount","aBirth","aOtherDependents","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5",
+    "bAccount","bBirth","bOtherDependents","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5",
     "minArea","mode","bothApply","allowSpecialGeneral","diversify"
   ];
-  const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bothApply","allowSpecialGeneral","diversify"]);
+  const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
   const NOTICE_FIELDS=["projectName","noticeDate","location","housingType","priorityRegion","priorityYears","specialMonths","generalMonths","generalHeadRequired"];
   let notices=readStorage(NOTICES_KEY,{});
   if(!Object.keys(notices).length)notices[DEFAULT_NOTICE.id]=clone(DEFAULT_NOTICE);
@@ -108,12 +108,12 @@
     const d=id=>R.normalizeDate($(id).value);
     const c=id=>$(id).checked;
     const person=key=>({
-      account:d(key+"Account"),generalScore:num(v(key+"GeneralScore")),multiScore:num(v(key+"MultiScore")),monthlyIncome:num(v(key+"MonthlyIncome")),
-      birth:d(key+"Birth"),head:c(key+"Head"),deposit:c(key+"Deposit"),tax5:c(key+"Tax5"),
-      elder3:c(key+"Elder3"),elderNoHome:c(key+"ElderNoHome"),agency:c(key+"Agency")
+      account:d(key+"Account"),monthlyIncome:num(v(key+"MonthlyIncome")),birth:d(key+"Birth"),otherDependents:num(v(key+"OtherDependents")),
+      head:c(key+"Head"),deposit:c(key+"Deposit"),tax5:c(key+"Tax5"),elder3:c(key+"Elder3"),elderNoHome:c(key+"ElderNoHome"),agency:c(key+"Agency"),
+      threeGeneration:c(key+"ThreeGeneration"),singleParent5:c(key+"SingleParent5")
     });
     const partial={
-      profileType:selectedProfileType(),singleHouseholdKind:v("singleHouseholdKind"),unmarriedChildRegistered:c("unmarriedChildRegistered"),residenceRegion:v("residenceRegion"),residenceStart:d("residenceStart"),
+      profileType:selectedProfileType(),singleHouseholdKind:v("singleHouseholdKind"),unmarriedChildRegistered:c("unmarriedChildRegistered"),residenceRegion:v("residenceRegion"),residenceStart:d("residenceStart"),lastHomeDisposal:d("lastHomeDisposal"),
       noHome:c("noHome"),neverHome:c("neverHome"),specialClean:c("specialClean"),reWinClean:c("reWinClean"),
       marriageDate:d("marriageDate"),children:num(v("children")),fetuses:num(v("fetuses")),marriageChildren:num(v("marriageChildren")),infants:num(v("infants")),
       youngestBirth:d("youngestBirth"),assetOk:c("assetOk"),householdSize:num(v("householdSize")),people:{a:person("a"),b:person("b")}
@@ -129,6 +129,7 @@
     const married=summary.legalSpouse;
     const onePerson=!married&&summary.specialChildren===0;
     $("marriageDateField").classList.toggle("is-hidden",!married);
+    $("lastHomeDisposalField").classList.toggle("is-hidden",profile.neverHome);
     $("singleHouseholdKindField").classList.toggle("is-hidden",!onePerson);
     $("unmarriedChildRegisteredField").classList.toggle("is-hidden",married||summary.specialChildren===0);
     $("personBCard").classList.toggle("is-hidden",!married);
@@ -150,6 +151,13 @@
     $("childCountSummary").innerHTML=`<div><b>${summary.specialChildren}명</b><span>특공 자녀 수<br><small>출생 ${profile.children} + 태아 ${profile.fetuses}</small></span></div><div><b>${summary.generalChildren}명</b><span>일반공급 자녀 수<br><small>주민등록된 출생자녀 기준</small></span></div><div><b>${summary.automaticHouseholdSize}명</b><span>소득 가구원 자동값<br><small>태아 포함</small></span></div>`;
     const incomeBand=income.total<=income.thresholds[100]?"100% 이하":income.total<=income.thresholds[120]?"100~120%":income.total<=income.thresholds[130]?"120~130%":income.total<=income.thresholds[140]?"130~140%":income.total<=income.thresholds[160]?"140~160%":"160% 초과";
     $("incomeSummary").innerHTML=`<div><span>가구 합산 월소득</span><b>${formatWon(income.total)}</b><small>A ${formatWon(income.aIncome)}${married?` · B ${formatWon(income.bIncome)}`:""}</small></div><div><span>100% 기준액</span><b>${formatWon(income.base)}</b><small>${income.size}인 가구 · 2025 기준</small></div><div class="income-percent"><span>도시근로자 소득비율</span><b>${income.pct.toFixed(1)}%</b><small>${income.dualIncome?"맞벌이":"외벌이·단독소득"}</small></div><div><span>자동 구간</span><b>${incomeBand}</b><small>공고문 원단위 상한으로 판정</small></div><div class="income-thresholds"><span>${income.size}인 가구 월소득 상한</span><b>100% ${formatWon(income.thresholds[100])} · 120% ${formatWon(income.thresholds[120])} · 130% ${formatWon(income.thresholds[130])} · 140% ${formatWon(income.thresholds[140])} · 160% ${formatWon(income.thresholds[160])}</b></div>`;
+    ["a","b"].forEach(key=>{
+      const general=R.generalScore(key,profile,notice),multi=R.multiScore(key,profile,notice);
+      $(key+"GeneralScore").textContent=`${general.points}점`;
+      $(key+"GeneralBreakdown").textContent=`무주택 ${general.noHomePoints} + 부양가족 ${general.dependentPoints} + 통장 ${general.accountPoints}${general.complete?"":` · 입력 필요: ${general.missing.join(", ")}`}`;
+      $(key+"MultiScore").textContent=`${multi.points}점`;
+      $(key+"MultiBreakdown").textContent=`자녀 ${multi.childPoints} + 영유아 ${multi.infantPoints} + 세대 ${multi.householdPoints} + 무주택 ${multi.noHomePoints} + 거주 ${multi.residencePoints} + 통장 ${multi.accountPoints}${multi.complete?"":` · 입력 필요: ${multi.missing.join(", ")}`}`;
+    });
   }
 
   function refreshLibrary(){
@@ -330,6 +338,8 @@
   function candidateRows(personKey,profile){
     const personLabel=personKey==="a"?"신청자 A":"배우자 B";
     const e=R.eligibility(personKey,profile,notice);
+    const generalScore=R.generalScore(personKey,profile,notice);
+    const multiScore=R.multiScore(personKey,profile,notice);
     const priority=residencePriority(profile);
     const mode=$("mode").value,minArea=num($("minArea").value);
     const rows=[];
@@ -354,10 +364,10 @@
         if(type==="general"){
           const alloc=R.generalAllocation(supply,size.area,notice.pointRates);
           seatText=`가점 ${alloc.point} + 추첨 ${alloc.lottery}`;
-          score+=(profile.people[personKey].generalScore-45)*.45+alloc.lottery*1.4;
-          reasons.push(`가점 ${profile.people[personKey].generalScore}점`,seatText);
+          score+=(generalScore.points-45)*.45+alloc.lottery*1.4;
+          reasons.push(`가점 ${generalScore.points}점${generalScore.complete?"":"(일부 입력 필요)"}`,seatText);
         }
-        if(type==="multi"){score+=(profile.people[personKey].multiScore-50)*.4;reasons.push(`다자녀 ${profile.people[personKey].multiScore}점`)}
+        if(type==="multi"){score+=(multiScore.points-50)*.4;reasons.push(`다자녀 ${multiScore.points}점${multiScore.complete?"":"(일부 입력 필요)"}`)}
         if(mode==="probability")score-=num(size.area)*.04;
         if(mode==="quality")score+=num(size.area)*.22;
         if(mode==="balance")score+=Math.min(85,num(size.area))*.08;

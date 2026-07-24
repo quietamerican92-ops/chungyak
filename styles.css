@@ -63,3 +63,12 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .profile-subfields{display:flex;align-items:flex-end;gap:14px;margin-top:12px}.profile-subfields>label:first-child{min-width:310px}.profile-subfields .checkline{padding:0 0 10px}@media(max-width:760px){.profile-subfields{display:grid;grid-template-columns:1fr}.profile-subfields>label:first-child{min-width:0}}
 
 .income-summary .income-thresholds{grid-column:1/-1;background:#f4f7ef}.income-summary .income-thresholds b{font-size:13px;line-height:1.7;color:#30483a}
+
+.score-results{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.score-results>div{border:1px solid var(--line);border-radius:13px;padding:13px;background:#f8faf7;display:grid;grid-template-columns:1fr auto;gap:5px 12px;align-items:center}
+.score-results span{font-size:11px;font-weight:900;color:var(--muted)}
+.score-results output{font-size:24px;font-weight:950;color:var(--green)}
+.person-b .score-results output{color:var(--blue)}
+.score-results small{grid-column:1/-1;color:var(--muted);font-size:11px;line-height:1.5}
+.field-help{display:block;margin-top:5px;color:var(--muted);font-size:10px;font-weight:700}
+@media(max-width:760px){.score-results{grid-template-columns:1fr}}

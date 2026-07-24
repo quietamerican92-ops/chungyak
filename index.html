@@ -55,7 +55,8 @@
         <article class="card">
           <h3>세대·거주</h3>
           <label>현재 거주 시·도<input id="residenceRegion" value="서울특별시" placeholder="예: 서울특별시"></label>
-          <label>현재 지역 전입일<input id="residenceStart" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>해당 시·도 연속 거주 시작일<input id="residenceStart" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label id="lastHomeDisposalField" class="is-hidden">신청자·배우자의 최근 주택 처분일<input id="lastHomeDisposal" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
           <div class="checks">
             <label><input id="noHome" type="checkbox" checked> 무주택세대구성원</label>
             <label><input id="neverHome" type="checkbox" checked> 세대 전원이 과거 주택소유 없음</label>
@@ -71,7 +72,7 @@
             <label>출생한 미성년 자녀 수<input id="children" type="number" min="0" value="0"></label>
             <label>임신 중 태아 수<input id="fetuses" type="number" min="0" value="0"></label>
             <label>혼인 중 출생·임신한 자녀 수<input id="marriageChildren" type="number" min="0" value="0"></label>
-            <label>영유아 자녀 수<input id="infants" type="number" min="0" value="0"></label>
+            <label>출생한 만 6세 미만 자녀 수<input id="infants" type="number" min="0" value="0"></label>
             <label>막내 출생일<input id="youngestBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
           </div>
           <div class="checks">
@@ -102,9 +103,12 @@
           <div class="person-title"><span>A</span><h3>신청자 A</h3></div>
           <div class="form-grid">
             <label>청약통장 가입일<input id="aAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
-            <label>일반공급 가점<input id="aGeneralScore" type="number" min="0" max="84" value="52"></label>
-            <label>다자녀 배점<input id="aMultiScore" type="number" min="0" max="100" value="75"></label>
             <label>생년월일<input id="aBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+            <label>추가 인정 부양가족 수<input id="aOtherDependents" type="number" min="0" value="0"><span class="field-help">직계존속·성년 미혼자녀 등</span></label>
+          </div>
+          <div class="score-results">
+            <div><span>일반공급 가점</span><output id="aGeneralScore">자동 계산</output><small id="aGeneralBreakdown"></small></div>
+            <div><span>다자녀 배점</span><output id="aMultiScore">자동 계산</output><small id="aMultiBreakdown"></small></div>
           </div>
           <div class="checks compact">
             <label><input id="aHead" type="checkbox" checked> 세대주</label>
@@ -113,6 +117,8 @@
             <label><input id="aElder3" type="checkbox"> 65세 이상 직계존속 3년 부양</label>
             <label><input id="aElderNoHome" type="checkbox"> 피부양 노부모 부부 모두 무주택</label>
             <label><input id="aAgency" type="checkbox"> 기관추천 대상 확인 완료</label>
+            <label><input id="aThreeGeneration" type="checkbox"> 3세대 이상 3년 계속 동거</label>
+            <label><input id="aSingleParent5" type="checkbox"> 법정 한부모가족 5년 경과</label>
           </div>
         </article>
 
@@ -120,9 +126,12 @@
           <div class="person-title"><span>B</span><h3 id="personBTitle">신청자 B</h3></div>
           <div class="form-grid">
             <label>청약통장 가입일<input id="bAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
-            <label>일반공급 가점<input id="bGeneralScore" type="number" min="0" max="84" value="48"></label>
-            <label>다자녀 배점<input id="bMultiScore" type="number" min="0" max="100" value="75"></label>
             <label>생년월일<input id="bBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+            <label>추가 인정 부양가족 수<input id="bOtherDependents" type="number" min="0" value="0"><span class="field-help">직계존속·성년 미혼자녀 등</span></label>
+          </div>
+          <div class="score-results">
+            <div><span>일반공급 가점</span><output id="bGeneralScore">자동 계산</output><small id="bGeneralBreakdown"></small></div>
+            <div><span>다자녀 배점</span><output id="bMultiScore">자동 계산</output><small id="bMultiBreakdown"></small></div>
           </div>
           <div class="checks compact">
             <label><input id="bHead" type="checkbox"> 세대주</label>
@@ -131,6 +140,8 @@
             <label><input id="bElder3" type="checkbox"> 65세 이상 직계존속 3년 부양</label>
             <label><input id="bElderNoHome" type="checkbox"> 피부양 노부모 부부 모두 무주택</label>
             <label><input id="bAgency" type="checkbox"> 기관추천 대상 확인 완료</label>
+            <label><input id="bThreeGeneration" type="checkbox"> 3세대 이상 3년 계속 동거</label>
+            <label><input id="bSingleParent5" type="checkbox"> 법정 한부모가족 5년 경과</label>
           </div>
         </article>
       </div>

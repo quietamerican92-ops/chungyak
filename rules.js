@@ -105,6 +105,91 @@
     }};
   }
 
+  function addYears(dateValue,years){
+    const normalized=normalizeDate(dateValue);
+    if(!normalized)return "";
+    const date=new Date(normalized+"T00:00:00");
+    const month=date.getMonth();
+    date.setFullYear(date.getFullYear()+years);
+    if(date.getMonth()!==month)date.setDate(0);
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  }
+  function laterDate(...values){return values.map(normalizeDate).filter(Boolean).sort().pop()||"";}
+  function ownAccountPoints(account,noticeDate){
+    if(!normalizeDate(account)||!normalizeDate(noticeDate))return {points:0,years:0,complete:false};
+    const years=yearsBetween(account,noticeDate),months=years*12;
+    const points=months<6?1:months<12?2:Math.min(17,Math.floor(years)+2);
+    return {points,years,complete:true};
+  }
+  function spouseAccountPoints(account,noticeDate){
+    if(!normalizeDate(account)||!normalizeDate(noticeDate))return {points:0,years:0};
+    const years=yearsBetween(account,noticeDate);
+    return {points:years<1?1:years<2?2:3,years};
+  }
+  function generalNoHomePoints(person,profile,noticeDate){
+    const missing=[];
+    if(!profile.noHome)return {points:0,years:0,start:"",complete:true,missing};
+    if(!normalizeDate(person.birth)){missing.push("생년월일");return {points:0,years:0,start:"",complete:false,missing};}
+    if(!normalizeDate(noticeDate)){missing.push("공고일");return {points:0,years:0,start:"",complete:false,missing};}
+    const age30=addYears(person.birth,30);
+    const married=hasLegalSpouse(profile)&&normalizeDate(profile.marriageDate);
+    if(!married&&normalizeDate(noticeDate)<age30)return {points:0,years:0,start:age30,complete:true,missing};
+    let start=married&&normalizeDate(profile.marriageDate)<age30?normalizeDate(profile.marriageDate):age30;
+    if(!profile.neverHome){
+      const disposal=normalizeDate(profile.lastHomeDisposal);
+      if(!disposal){missing.push("최근 주택 처분일");return {points:0,years:0,start:"",complete:false,missing};}
+      start=laterDate(start,disposal);
+    }
+    const years=yearsBetween(start,noticeDate);
+    const points=years>=15?32:years<1?2:Math.min(32,(Math.floor(years)+1)*2);
+    return {points,years,start,complete:true,missing};
+  }
+  function generalScore(personKey,profile,notice){
+    const person=profile.people[personKey];
+    const spouse=profile.people[personKey==="a"?"b":"a"];
+    const noHome=generalNoHomePoints(person,profile,notice.noticeDate);
+    const own=ownAccountPoints(person.account,notice.noticeDate);
+    const spouseAccount=hasLegalSpouse(profile)?spouseAccountPoints(spouse.account,notice.noticeDate):{points:0,years:0};
+    const accountPoints=Math.min(17,own.points+spouseAccount.points);
+    const childDependents=hasLegalSpouse(profile)||profile.unmarriedChildRegistered?integer(profile.children):0;
+    const dependents=Math.max(0,(hasLegalSpouse(profile)?1:0)+childDependents+integer(person.otherDependents));
+    const dependentPoints=Math.min(35,(Math.min(6,dependents)+1)*5);
+    const missing=[...noHome.missing];
+    if(!own.complete)missing.push("청약통장 가입일");
+    return {points:noHome.points+dependentPoints+accountPoints,noHomePoints:noHome.points,noHomeYears:noHome.years,dependentPoints,dependents,accountPoints,ownAccountPoints:own.points,spouseAccountPoints:spouseAccount.points,complete:missing.length===0,missing:[...new Set(missing)]};
+  }
+  function multiNoHomePoints(person,profile,noticeDate){
+    const missing=[];
+    if(!profile.noHome)return {points:0,years:0,complete:true,missing};
+    if(!normalizeDate(person.birth)){missing.push("생년월일");return {points:0,years:0,complete:false,missing};}
+    let start=addYears(person.birth,19);
+    if(!profile.neverHome){
+      const disposal=normalizeDate(profile.lastHomeDisposal);
+      if(!disposal){missing.push("최근 주택 처분일");return {points:0,years:0,complete:false,missing};}
+      start=laterDate(start,disposal);
+    }
+    const years=yearsBetween(start,noticeDate);
+    return {points:years>=10?20:years>=5?15:years>=1?10:0,years,complete:true,missing};
+  }
+  function multiScore(personKey,profile,notice){
+    const person=profile.people[personKey];
+    const children=specialChildCount(profile);
+    const infants=integer(profile.infants)+integer(profile.fetuses);
+    const childPoints=children>=4?40:children===3?35:children===2?25:0;
+    const infantPoints=Math.min(15,infants*5);
+    const householdPoints=person.threeGeneration||person.singleParent5?5:0;
+    const noHome=multiNoHomePoints(person,profile,notice.noticeDate);
+    const residenceValid=normalizeDate(profile.residenceStart)&&normalizeDate(notice.noticeDate);
+    const residenceYears=residenceValid?yearsBetween(profile.residenceStart,notice.noticeDate):0;
+    const residencePoints=residenceYears>=10?15:residenceYears>=5?10:residenceYears>=1?5:0;
+    const accountValid=normalizeDate(person.account)&&normalizeDate(notice.noticeDate);
+    const accountYears=accountValid?yearsBetween(person.account,notice.noticeDate):0;
+    const accountPoints=accountYears>=10?5:0;
+    const missing=[...noHome.missing];
+    if(!residenceValid)missing.push("연속 거주 시작일");
+    if(!accountValid)missing.push("청약통장 가입일");
+    return {points:childPoints+infantPoints+householdPoints+noHome.points+residencePoints+accountPoints,childPoints,children,infantPoints,infants,householdPoints,noHomePoints:noHome.points,noHomeYears:noHome.years,residencePoints,residenceYears,accountPoints,accountYears,complete:missing.length===0,missing:[...new Set(missing)]};
+  }
   function incomeStage(type,profile){
     const income=incomeMetrics(profile);
     const pct=income.pct;
@@ -168,7 +253,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);
