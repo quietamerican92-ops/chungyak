@@ -45,6 +45,11 @@
     return {total,stage1,stage2,stage3,firstRate:Number(firstRate),secondRate:Number(secondRate)};
   }
 
+  function availableSpecialStages(entryStage,allocation){
+    const first=Math.max(1,integer(entryStage));
+    return [1,2,3].filter(stage=>stage>=first&&integer(allocation?.[`stage${stage}`])>0);
+  }
+
   function normalizeDate(value){
     const raw=String(value||"").trim();
     if(!raw)return "";
@@ -253,7 +258,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

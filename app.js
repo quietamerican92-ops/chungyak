@@ -326,7 +326,8 @@
       <td class="num-cell">${row.noHomePriority}</td><td class="num-cell">${row.lotteryRemainder}</td></tr>`).join("")}</tbody>
       <tfoot><tr><td>합계</td><td></td><td class="num-cell">${sum(rows,"total")}</td><td></td><td class="num-cell">${sum(rows,"point")}</td><td class="num-cell">${sum(rows,"lottery")}</td><td class="num-cell">${sum(rows,"noHomePriority")}</td><td class="num-cell">${sum(rows,"lotteryRemainder")}</td></tr></tfoot></table>`;
   }
-  function stageApplicants(profile,type,stage){
+  function stageApplicants(profile,type,stage,value){
+    if(num(value)<=0)return [];
     const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
     return people.filter(key=>{
       const item=R.eligibility(key,profile,notice)[type];
@@ -334,8 +335,9 @@
     });
   }
   function stageCell(value,type,stage,profile){
-    const applicants=stageApplicants(profile,type,stage);
-    return `<td class="num-cell ${applicants.length?"stage-active":""}"><span class="tag ${stage===3?"lottery":""}">${value}</span>${applicants.length?`<small class="stage-applicants">${applicants.map(key=>`<i class="${key==="b"?"person-b":""}">${key.toUpperCase()} 진입</i>`).join("")}</small>`:""}</td>`;
+    const applicants=stageApplicants(profile,type,stage,value);
+    const active=applicants.length>0;
+    return `<td class="num-cell stage-cell ${active?"stage-active":"stage-inactive"}">${active?`<span class="stage-checks">${applicants.map(key=>`<i class="${key==="b"?"person-b":""}" title="${key==="a"?"신청자 A":"배우자 B"} 진입 가능" aria-label="${key==="a"?"신청자 A":"배우자 B"} 진입 가능">✓</i>`).join("")}</span>`:""}<span class="tag ${stage===3?"lottery":""}">${value}</span></td>`;
   }
   function renderSpecialSeats(profile){
     const rows=specialSeatRows();
@@ -343,7 +345,8 @@
     const summaries=[];
     ["newly","first","baby"].forEach(type=>people.forEach(key=>{
       const item=R.eligibility(key,profile,notice)[type];
-      if(item.ok&&item.band?.stage)summaries.push(`<span>${key.toUpperCase()} · ${R.TYPE_LABELS[type]}: ${item.band.stage}단계부터 진입</span>`);
+      const hasVolume=item.ok&&item.band?.stage&&rows.some(row=>row.type===type&&R.availableSpecialStages(item.band.stage,row).length);
+      if(hasVolume)summaries.push(`<span><i class="stage-legend-check ${key==="b"?"person-b":""}">✓</i>${key.toUpperCase()} · ${R.TYPE_LABELS[type]}: 실제 물량 있는 ${item.band.stage}단계 이후 진입</span>`);
     }));
     $("specialSeats").innerHTML=rows.length?`${summaries.length?`<div class="stage-summary">${summaries.join("")}</div>`:"<div class='stage-summary'><span>현재 입력으로 진입 가능한 소득단계가 없습니다.</span></div>"}<table><thead><tr><th>주택형</th><th>유형</th><th>유형 물량</th><th>1단계 우선 50%</th><th>2단계 일반 20%</th><th>3단계 추첨</th><th>해석</th></tr></thead><tbody>${rows.map(row=>`<tr>
       <td><b>${esc(row.size)}</b></td><td>${R.TYPE_LABELS[row.type]}</td><td class="num-cell">${row.total}</td>
@@ -370,12 +373,13 @@
         if(["newly","first","baby"].includes(type)){
           const alloc=R.specialAllocation(supply);
           const stage=e[type].band.stage;
-          seats=stage===1?alloc.stage1+alloc.stage2+alloc.stage3:stage===2?alloc.stage2+alloc.stage3:alloc.stage3;
+          const availableStages=R.availableSpecialStages(stage,alloc);
+          seats=availableStages.reduce((total,current)=>total+alloc[`stage${current}`],0);
+          if(!seats)return;
           seatText=`${e[type].band.label} · 진입가능 ${seats}세대`;
           score+=stage===1?16:stage===2?8:0;
-          reasons.push(e[type].band.label,`현재단계 이후 ${seats}세대`);
+          reasons.push(e[type].band.label,`${availableStages.join("·")}단계 실제 물량 ${seats}세대`);
           if(type==="newly"){score+=e.newly.newlyRank===1?10:-6;reasons.push(`신혼부부 ${e.newly.newlyRank}순위`);}
-          if(!seats)score-=35;
         }
         if(type==="general"){
           const alloc=R.generalAllocation(supply,size.area,notice.pointRates);

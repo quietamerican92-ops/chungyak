@@ -12,6 +12,9 @@ assert.strictEqual(R.generalAllocation(2,84.9807,rates).lottery,0);
 assert.deepStrictEqual(R.specialAllocation(3),{total:3,stage1:2,stage2:1,stage3:0,firstRate:50,secondRate:20});
 assert.deepStrictEqual(R.specialAllocation(6),{total:6,stage1:3,stage2:2,stage3:1,firstRate:50,secondRate:20});
 assert.deepStrictEqual(R.specialAllocation(1),{total:1,stage1:1,stage2:0,stage3:0,firstRate:50,secondRate:20});
+assert.deepStrictEqual(R.availableSpecialStages(3,R.specialAllocation(3)),[]);
+assert.deepStrictEqual(R.availableSpecialStages(2,R.specialAllocation(3)),[2]);
+assert.deepStrictEqual(R.availableSpecialStages(2,R.specialAllocation(6)),[2,3]);
 
 const marriedProfile={
   profileType:"married",marriageDate:"2022-07-01",children:1,fetuses:1,infants:0,residenceStart:"2010-01-01",householdSize:4,assetOk:true,
