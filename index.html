@@ -13,7 +13,7 @@
       <div>
         <div class="eyebrow">민영주택 · 가구 통합 분석</div>
         <h1>우리집 청약 전략실</h1>
-        <p>가구 정보는 한 번 저장하고, 모집공고만 바꿔 실제 좌석과 신청 조합을 다시 계산합니다.</p>
+        <p>가구 정보는 한 번 저장하고, 모집공고만 바꿔 실제 물량과 신청 조합을 다시 계산합니다.</p>
       </div>
       <div class="privacy"><span>●</span> PDF와 가족정보는 이 기기 안에서만 처리</div>
     </div>
@@ -23,7 +23,7 @@
     <nav class="steps" aria-label="계산 단계">
       <button class="step active" data-panel="profile"><b>1</b><span>나의 프로필</span><small>한 번 저장</small></button>
       <button class="step" data-panel="notice"><b>2</b><span>모집공고</span><small>PDF 분석·검수</small></button>
-      <button class="step" data-panel="strategy"><b>3</b><span>좌석·전략</span><small>신청 조합 추천</small></button>
+      <button class="step" data-panel="strategy"><b>3</b><span>물량·전략</span><small>신청 조합 추천</small></button>
     </nav>
 
     <section id="profile" class="panel active">
@@ -208,18 +208,18 @@
           <label>60㎡ 초과~85㎡ 이하<input id="pointRateMedium" type="number" min="0" max="100" value="70"><span class="suffix">%</span></label>
           <label>85㎡ 초과<input id="pointRateLarge" type="number" min="0" max="100" value="80"><span class="suffix">%</span></label>
         </div>
-        <p class="formula">가점 좌석 = 올림(일반공급 × 가점비율) · 추첨 좌석 = 나머지 · 추첨 중 무주택 우선 = 올림(추첨 × 75%)</p>
+        <p class="formula">가점 물량 = 올림(일반공급 × 가점비율) · 추첨 물량 = 나머지 · 추첨 중 무주택 우선 = 올림(추첨 × 75%)</p>
       </article>
 
       <div class="actions split">
         <button class="ghost" data-go="profile">← 프로필 정보</button>
-        <button id="confirmNotice" class="primary">숫자 검수 완료하고 좌석 계산 →</button>
+        <button id="confirmNotice" class="primary">숫자 검수 완료하고 물량 계산 →</button>
       </div>
     </section>
 
     <section id="strategy" class="panel">
       <div class="section-head">
-        <div><span class="kicker">SEAT & STRATEGY</span><h2>실제 좌석과 가구 전략</h2></div>
+        <div><span class="kicker">SUPPLY & STRATEGY</span><h2>실제 물량과 가구 전략</h2></div>
         <button class="ghost" data-go="notice">공고 수정</button>
       </div>
 
@@ -236,12 +236,12 @@
       <div id="recommendation"></div>
 
       <article class="card result-card">
-        <div class="card-head"><div><span class="kicker">GENERAL SUPPLY</span><h3>일반공급 실제 좌석</h3></div><span class="rounding">소수점 올림 반영</span></div>
+        <div class="card-head"><div><span class="kicker">GENERAL SUPPLY</span><h3>일반공급 실제 물량</h3></div><span class="rounding">소수점 올림 반영</span></div>
         <div id="generalSeats" class="table-wrap"></div>
       </article>
 
       <article class="card result-card">
-        <div class="card-head"><div><span class="kicker">SPECIAL SUPPLY</span><h3>특별공급 단계별 실제 좌석</h3></div><span class="rounding">50% → 20% → 나머지</span></div>
+        <div class="card-head"><div><span class="kicker">SPECIAL SUPPLY</span><h3>특별공급 단계별 실제 물량</h3></div><span class="rounding">50% → 20% → 나머지</span></div>
         <div id="specialSeats" class="table-wrap"></div>
       </article>
 
@@ -253,8 +253,8 @@
       <details class="legal-note">
         <summary>계산 원칙과 꼭 확인할 점</summary>
         <div>
-          <p>이 계산기는 모집공고 물량을 법정 비율로 좌석화하고 상대적인 전략 우선순위를 비교합니다. 경쟁률이나 실제 당첨확률을 예측하지 않습니다.</p>
-          <p>특별공급 각 단계의 미달 좌석과 낙첨자는 다음 단계로 넘어가므로 실제 접수결과에 따라 후속 단계 좌석은 늘 수 있습니다. 최종 신청 전 청약Home과 사업주체에 자격을 확인하세요.</p>
+          <p>이 계산기는 모집공고 물량을 법정 비율로 물량화하고 상대적인 전략 우선순위를 비교합니다. 경쟁률이나 실제 당첨확률을 예측하지 않습니다.</p>
+          <p>특별공급 각 단계의 미달 물량과 낙첨자는 다음 단계로 넘어가므로 실제 접수결과에 따라 후속 단계 물량은 늘 수 있습니다. 최종 신청 전 청약Home과 사업주체에 자격을 확인하세요.</p>
         </div>
       </details>
     </section>

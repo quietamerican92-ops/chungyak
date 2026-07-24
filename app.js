@@ -191,16 +191,16 @@
   function renderSupplyRows(){
     $("supplyRows").innerHTML=notice.sizes.map((row,index)=>`<tr data-index="${index}">
       <td><input class="name" data-field="name" value="${esc(row.name)}"></td>
-      <td><input data-field="area" type="number" min="0" step=".0001" value="${num(row.area)}"></td>
-      <td><input data-field="total" type="number" min="0" value="${num(row.total)}"></td>
-      ${["agency","multi","newly","elder","first","baby","general"].map(field=>`<td><input data-field="${field}" type="number" min="0" value="${num(row[field])}"></td>`).join("")}
+      <td class="num-cell"><input data-field="area" type="number" min="0" step=".0001" value="${num(row.area)}"></td>
+      <td class="num-cell"><input data-field="total" type="number" min="0" value="${num(row.total)}"></td>
+      ${["agency","multi","newly","elder","first","baby","general"].map(field=>`<td class="num-cell"><input data-field="${field}" type="number" min="0" value="${num(row[field])}"></td>`).join("")}
       <td><button class="icon-delete" data-delete="${index}" aria-label="${esc(row.name)} 삭제">×</button></td>
     </tr>`).join("");
     renderSupplyTotal();
   }
   function renderSupplyTotal(){
     const keys=["total","agency","multi","newly","elder","first","baby","general"];
-    $("supplyTotal").innerHTML=`<tr><td>합계</td><td></td>${keys.map(key=>`<td>${sum(notice.sizes,key)}</td>`).join("")}<td></td></tr>`;
+    $("supplyTotal").innerHTML=`<tr><td>합계</td><td></td>${keys.map(key=>`<td class="num-cell">${sum(notice.sizes,key)}</td>`).join("")}<td></td></tr>`;
   }
   function syncNoticeMeta(){
     NOTICE_FIELDS.forEach(id=>notice[id]=["priorityYears","specialMonths","generalMonths"].includes(id)?num($(id).value):id==="noticeDate"?R.normalizeDate($(id).value):$(id).value);
@@ -320,21 +320,37 @@
   }
   function renderGeneralSeats(){
     const rows=generalSeatRows();
-    $("generalSeats").innerHTML=`<table><thead><tr><th>주택형</th><th>실제 전용</th><th>일반공급</th><th>가점 비율</th><th>가점 좌석</th><th>추첨 좌석</th><th>추첨 중 무주택 우선</th><th>잔여 추첨</th></tr></thead><tbody>${rows.map(row=>`<tr>
-      <td><b>${esc(row.name)}</b></td><td>${row.area.toFixed(4)}㎡</td><td>${row.total}</td><td>${row.pointRate}%</td>
-      <td><span class="tag">${row.point}</span></td><td><span class="tag lottery">${row.lottery}</span></td>
-      <td>${row.noHomePriority}</td><td>${row.lotteryRemainder}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td>합계</td><td></td><td>${sum(rows,"total")}</td><td></td><td>${sum(rows,"point")}</td><td>${sum(rows,"lottery")}</td><td>${sum(rows,"noHomePriority")}</td><td>${sum(rows,"lotteryRemainder")}</td></tr></tfoot></table>`;
+    $("generalSeats").innerHTML=`<table><thead><tr><th>주택형</th><th>실제 전용</th><th>일반공급</th><th>가점 비율</th><th>가점 물량</th><th>추첨 물량</th><th>추첨 중 무주택 우선</th><th>잔여 추첨</th></tr></thead><tbody>${rows.map(row=>`<tr>
+      <td><b>${esc(row.name)}</b></td><td class="num-cell">${row.area.toFixed(4)}㎡</td><td class="num-cell">${row.total}</td><td class="num-cell">${row.pointRate}%</td>
+      <td class="num-cell"><span class="tag">${row.point}</span></td><td class="num-cell"><span class="tag lottery">${row.lottery}</span></td>
+      <td class="num-cell">${row.noHomePriority}</td><td class="num-cell">${row.lotteryRemainder}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td>합계</td><td></td><td class="num-cell">${sum(rows,"total")}</td><td></td><td class="num-cell">${sum(rows,"point")}</td><td class="num-cell">${sum(rows,"lottery")}</td><td class="num-cell">${sum(rows,"noHomePriority")}</td><td class="num-cell">${sum(rows,"lotteryRemainder")}</td></tr></tfoot></table>`;
   }
-  function renderSpecialSeats(){
+  function stageApplicants(profile,type,stage){
+    const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
+    return people.filter(key=>{
+      const item=R.eligibility(key,profile,notice)[type];
+      return item.ok&&item.band?.stage>=1&&item.band.stage<=stage;
+    });
+  }
+  function stageCell(value,type,stage,profile){
+    const applicants=stageApplicants(profile,type,stage);
+    return `<td class="num-cell ${applicants.length?"stage-active":""}"><span class="tag ${stage===3?"lottery":""}">${value}</span>${applicants.length?`<small class="stage-applicants">${applicants.map(key=>`<i class="${key==="b"?"person-b":""}">${key.toUpperCase()} 진입</i>`).join("")}</small>`:""}</td>`;
+  }
+  function renderSpecialSeats(profile){
     const rows=specialSeatRows();
-    $("specialSeats").innerHTML=rows.length?`<table><thead><tr><th>주택형</th><th>유형</th><th>유형물량</th><th>1단계 우선 50%</th><th>2단계 일반 20%</th><th>3단계 추첨</th><th>해석</th></tr></thead><tbody>${rows.map(row=>`<tr>
-      <td><b>${esc(row.size)}</b></td><td>${R.TYPE_LABELS[row.type]}</td><td>${row.total}</td>
-      <td><span class="tag">${row.stage1}</span></td><td>${row.stage2}</td><td><span class="tag ${row.stage3?"lottery":"zero"}">${row.stage3}</span></td>
-      <td class="muted">${row.stage3?`올림 후 추첨 ${row.stage3}석`:"소수점 올림으로 3단계 기본좌석 없음"}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td>합계</td><td></td><td>${sum(rows,"total")}</td><td>${sum(rows,"stage1")}</td><td>${sum(rows,"stage2")}</td><td>${sum(rows,"stage3")}</td><td>미달 좌석은 다음 단계 이월</td></tr></tfoot></table>`:"<p class='muted'>단계형 특별공급 물량이 없습니다.</p>";
+    const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
+    const summaries=[];
+    ["newly","first","baby"].forEach(type=>people.forEach(key=>{
+      const item=R.eligibility(key,profile,notice)[type];
+      if(item.ok&&item.band?.stage)summaries.push(`<span>${key.toUpperCase()} · ${R.TYPE_LABELS[type]}: ${item.band.stage}단계부터 진입</span>`);
+    }));
+    $("specialSeats").innerHTML=rows.length?`${summaries.length?`<div class="stage-summary">${summaries.join("")}</div>`:"<div class='stage-summary'><span>현재 입력으로 진입 가능한 소득단계가 없습니다.</span></div>"}<table><thead><tr><th>주택형</th><th>유형</th><th>유형 물량</th><th>1단계 우선 50%</th><th>2단계 일반 20%</th><th>3단계 추첨</th><th>해석</th></tr></thead><tbody>${rows.map(row=>`<tr>
+      <td><b>${esc(row.size)}</b></td><td>${R.TYPE_LABELS[row.type]}</td><td class="num-cell">${row.total}</td>
+      ${stageCell(row.stage1,row.type,1,profile)}${stageCell(row.stage2,row.type,2,profile)}${stageCell(row.stage3,row.type,3,profile)}
+      <td class="muted">${row.stage3?`올림 후 추첨 ${row.stage3}세대`:"소수점 올림으로 3단계 기본물량 없음"}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td>합계</td><td></td><td class="num-cell">${sum(rows,"total")}</td><td class="num-cell">${sum(rows,"stage1")}</td><td class="num-cell">${sum(rows,"stage2")}</td><td class="num-cell">${sum(rows,"stage3")}</td><td>미달 물량은 다음 단계 이월</td></tr></tfoot></table>`:"<p class='muted'>단계형 특별공급 물량이 없습니다.</p>";
   }
-
   function candidateRows(personKey,profile){
     const personLabel=personKey==="a"?"신청자 A":"배우자 B";
     const e=R.eligibility(personKey,profile,notice);
@@ -349,15 +365,15 @@
         const supply=num(size[type]);
         if(!supply||!e[type]?.ok)return;
         if(type==="first"&&e.first.singleHouseholdAreaLimited&&num(size.area)>60)return;
-        let seats=supply,seatText=`${supply}석`,score=25+Math.log2(supply+1)*12+(priority?12:0);
-        const reasons=[`배정 ${supply}석`,priority?"해당지역 우선":"기타지역 경쟁"];
+        let seats=supply,seatText=`${supply}세대`,score=25+Math.log2(supply+1)*12+(priority?12:0);
+        const reasons=[`배정 ${supply}세대`,priority?"해당지역 우선":"기타지역 경쟁"];
         if(["newly","first","baby"].includes(type)){
           const alloc=R.specialAllocation(supply);
           const stage=e[type].band.stage;
           seats=stage===1?alloc.stage1+alloc.stage2+alloc.stage3:stage===2?alloc.stage2+alloc.stage3:alloc.stage3;
-          seatText=`${e[type].band.label} · 진입가능 ${seats}석`;
+          seatText=`${e[type].band.label} · 진입가능 ${seats}세대`;
           score+=stage===1?16:stage===2?8:0;
-          reasons.push(e[type].band.label,`현재단계 이후 ${seats}석`);
+          reasons.push(e[type].band.label,`현재단계 이후 ${seats}세대`);
           if(type==="newly"){score+=e.newly.newlyRank===1?10:-6;reasons.push(`신혼부부 ${e.newly.newlyRank}순위`);}
           if(!seats)score-=35;
         }
@@ -368,9 +384,9 @@
           reasons.push(`가점 ${generalScore.points}점${generalScore.complete?"":"(일부 입력 필요)"}`,seatText);
         }
         if(type==="multi"){score+=(multiScore.points-50)*.4;reasons.push(`다자녀 ${multiScore.points}점${multiScore.complete?"":"(일부 입력 필요)"}`)}
-        if(mode==="probability")score-=num(size.area)*.04;
-        if(mode==="quality")score+=num(size.area)*.22;
-        if(mode==="balance")score+=Math.min(85,num(size.area))*.08;
+        if(mode==="probability"){score-=num(size.area)*.04;reasons.push("당첨기회 우선: 작은 면적에 상대 가중치");}
+        if(mode==="quality"){score+=num(size.area)*.22;reasons.push("주거품질 우선: 넓은 면적에 상대 가중치");}
+        if(mode==="balance"){score+=Math.min(85,num(size.area))*.08;reasons.push("균형형: 물량과 면적을 함께 반영");}
         rows.push({personKey,personLabel,type,size:size.name,area:size.area,supply,seats,seatText,reasons,score:Math.max(1,Math.min(99,score))});
       });
     });
@@ -392,7 +408,7 @@
     return {special,general};
   }
   function appLine(label,row){
-    return `<div class="application"><div><small>${label}</small><br>${row?esc(R.TYPE_LABELS[row.type]):"미신청"}</div><b>${row?`${esc(row.size)}<br><small>${esc(row.seatText)}</small>`:"—"}</b></div>`;
+    return `<div class="application"><div><small>${label}</small><br>${row?esc(R.TYPE_LABELS[row.type]):"미신청"}${row?`<span class="strategy-reason">근거 · ${esc(row.reasons.join(" · "))}</span>`:""}</div><b>${row?`${esc(row.size)}<br><small>${esc(row.seatText)} · 전략지수 ${row.score.toFixed(1)}</small>`:"—"}</b></div>`;
   }
   function renderRecommendation(aRows,bRows,profile){
     const a=pickPlan(aRows);
@@ -404,23 +420,23 @@
     $("recommendation").innerHTML=`<div class="recommend-hero">
       <span class="kicker">RECOMMENDED PLAN</span>
       <h3>${esc(notice.projectName)} 신청안</h3>
-      <p>실제 좌석, 현재 진입단계, 지역우선과 입력점수를 함께 비교한 상대 전략입니다.</p>
+      <p>같은 신청자의 가능한 조합 중 실제 물량·현재 진입단계·지역우선·자동 배점을 비교해 전략지수가 높은 안을 골랐습니다.</p>
       <div class="recommend-grid ${useB?"":"one"}">
         <div class="recommend-person"><h4>신청자 A</h4>${appLine("특별공급",a.special)}${appLine("일반공급",a.general)}</div>
         ${useB?`<div class="recommend-person"><h4>배우자 B</h4>${appLine("특별공급",b.special)}${appLine("일반공급",b.general)}</div>`:""}
       </div></div>`;
   }
   function renderCandidates(rows){
-    $("candidateTable").innerHTML=rows.length?`<table><thead><tr><th>신청자</th><th>주택형·유형</th><th>실제 좌석</th><th>전략지수</th></tr></thead><tbody>${rows.slice(0,24).map(row=>`<tr>
+    $("candidateTable").innerHTML=rows.length?`<table><thead><tr><th>신청자</th><th>주택형·유형</th><th>실제 물량</th><th>전략지수</th></tr></thead><tbody>${rows.slice(0,24).map(row=>`<tr>
       <td>${row.personLabel}</td><td><b>${esc(row.size)} · ${R.TYPE_LABELS[row.type]}</b><br><span class="muted">${esc(row.reasons.slice(1).join(" · "))}</span></td>
-      <td>${esc(row.seatText)}</td><td><span class="seat-main">${row.score.toFixed(1)}</span><div class="bar"><i style="width:${row.score}%"></i></div></td></tr>`).join("")}</tbody></table>`:"<p class='muted'>추천 후보가 없습니다.</p>";
+      <td class="num-cell">${esc(row.seatText)}</td><td class="num-cell"><span class="seat-main">${row.score.toFixed(1)}</span><div class="bar"><i style="width:${row.score}%"></i></div></td></tr>`).join("")}</tbody></table>`:"<p class='muted'>추천 후보가 없습니다.</p>";
   }
   function renderEligibility(profile){
     const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
     const types=Object.keys(R.TYPE_LABELS);
     $("eligibilityTable").innerHTML=`<table><thead><tr><th>유형</th>${people.map(key=>`<th>${key==="a"?"신청자 A":"배우자 B"}</th>`).join("")}</tr></thead><tbody>${types.map(type=>`<tr><td><b>${R.TYPE_LABELS[type]}</b></td>${people.map(key=>{
       const item=R.eligibility(key,profile,notice)[type];
-      return `<td><span class="tag ${item.ok?"":"zero"}">${item.ok?"가능":"확인"}</span><br><span class="muted">${esc(item.reason)}${item.band?.stage?` · ${esc(item.band.label)}`:""}</span></td>`;
+      return `<td class="eligibility-cell"><span class="eligibility-mark ${item.ok?"yes":"no"}">${item.ok?"O":"X"}</span><br><span class="muted">${esc(item.reason)}${item.band?.stage?` · ${esc(item.band.label)}`:""}</span></td>`;
     }).join("")}</tr>`).join("")}</tbody></table>`;
   }
 
@@ -434,7 +450,7 @@
     if(summary.type==="engaged")warnings.push("혼인 예정·미신고 상태는 민영 신혼부부 특별공급의 법적 배우자로 인정되지 않아 신청자 A 단독으로 계산했습니다.");
     if(summary.type==="married"&&!profile.marriageDate)warnings.push("혼인신고일이 없어 신혼부부 7년 요건을 판정할 수 없습니다.");
     $("strategyWarning").innerHTML=warnings.map(message=>`<div class="alert warn">${esc(message)}</div>`).join("");
-    renderGeneralSeats();renderSpecialSeats();
+    renderGeneralSeats();renderSpecialSeats(profile);
     const aRows=candidateRows("a",profile),bRows=R.hasSecondApplicant(profile)?candidateRows("b",profile):[];
     renderRecommendation(aRows,bRows,profile);
     renderCandidates([...aRows,...bRows].sort((a,b)=>b.score-a.score));
@@ -494,7 +510,7 @@
     syncNoticeMeta();
     const invalid=notice.sizes.some(row=>!row.name||num(row.area)<=0||num(row.total)!==sum([row],"agency")+sum([row],"multi")+sum([row],"newly")+sum([row],"elder")+sum([row],"first")+sum([row],"baby")+sum([row],"general"));
     if(!notice.projectName||!notice.noticeDate||!notice.sizes.length||invalid){toast("단지명·공고일·평형별 총물량을 확인해 주세요.");return}
-    notice.verified=true;saveCurrentNotice(false);renderNotice();calculate();setPanel("strategy");toast("검수된 좌석으로 전략을 계산했습니다.");
+    notice.verified=true;saveCurrentNotice(false);renderNotice();calculate();setPanel("strategy");toast("검수된 물량으로 전략을 계산했습니다.");
   });
   $("calculate").addEventListener("click",calculate);
 
