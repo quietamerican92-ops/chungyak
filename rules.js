@@ -81,22 +81,33 @@
     const entries=section.map((line,lineIndex)=>{
       const amounts=moneyValues(line);
       const price=amounts.find(candidate=>amounts.some(value=>near(value,candidate*.1))&&amounts.some(value=>near(value,candidate*.3)));
-      const unitMatch=line.match(/(?:\d+(?:~|-)\d+층|\d+층)\s+(\d+)/);
+      const unitMatch=line.match(/(?:\d+(?:~|-)\d+|\d+)\s*층\s+(\d+)/);
       return price?{line,lineIndex,price,units:unitMatch?integer(unitMatch[1]):0}:null;
     }).filter(Boolean);
     const options=new Map(orderedNames.map(name=>[name,new Set()]));
-    if(orderedSizes.length&&orderedSizes.every(row=>row.total>0)&&entries.some(row=>row.units>0)){
+    const canGroupByUnits=orderedSizes.length&&orderedSizes.every(row=>row.total>0)&&entries.some(row=>row.units>0);
+    let groupedByUnits=false;
+    if(canGroupByUnits&&entries.every(row=>row.units>0)){
       let cursor=0;
-      orderedSizes.forEach((size,sizeIndex)=>{
+      let valid=true;
+      const grouped=new Map(orderedNames.map(name=>[name,new Set()]));
+      for(const size of orderedSizes){
         let assignedUnits=0;
-        while(cursor<entries.length&&(assignedUnits<size.total||sizeIndex===orderedSizes.length-1)){
-          const entry=entries[cursor++];
-          options.get(size.size)?.add(entry.price);
+        while(cursor<entries.length&&assignedUnits<size.total){
+          const entry=entries[cursor];
+          if(assignedUnits+entry.units>size.total){valid=false;break}
+          cursor++;
+          grouped.get(size.size)?.add(entry.price);
           assignedUnits+=entry.units;
-          if(sizeIndex<orderedSizes.length-1&&assignedUnits>=size.total)break;
         }
-      });
-    }else{
+        if(!valid||assignedUnits!==size.total){valid=false;break}
+      }
+      if(valid){
+        grouped.forEach((values,name)=>values.forEach(value=>options.get(name)?.add(value)));
+        groupedByUnits=true;
+      }
+    }
+    if(!groupedByUnits&&!canGroupByUnits){
       let currentSize="";
       section.forEach(line=>{
         const foundName=names.find(name=>new RegExp(`(?:^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?:\\s|$)`).test(line));

@@ -81,11 +81,44 @@ const paymentFixture=[
   "15~19층 5 403,622,000 292,278,000 695,900,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 69,590,000 208,770,000",
   "59A 71 2층 7 688,866,000 498,834,000 1,187,700,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 118,770,000 356,310,000"
 ];
-const parsedPayments=R.parsePaymentData(paymentFixture,[{name:"36",total:20},{name:"59A",total:71}]);
+const parsedPayments=R.parsePaymentData(paymentFixture,[{name:"36",total:20},{name:"59A",total:7}]);
 assert.deepStrictEqual(parsedPayments.payments.map(row=>row.rate),[10,10,10,10,10,10,10,30]);
 assert.strictEqual(parsedPayments.payments[1].dueDate,"2027-01-30");
 assert.deepStrictEqual(parsedPayments.pricing.map(row=>({size:row.size,min:row.min,max:row.max})),[
   {size:"36",min:682000000,max:695900000},{size:"59A",min:1187700000,max:1187700000}
+]);
+const comma=value=>Math.round(value).toLocaleString("en-US");
+const priceLine=(floor,units,price)=>`${floor} ${units} ${comma(price*.58)} ${comma(price*.42)} ${comma(price)} ${comma(price*.1)} ${comma(price*.1)} ${comma(price*.3)}`;
+const pdfJsSpacingFixture=[
+  "■ 공급금액 및 납부일정 ( 단위 : 원 )",
+  "공급금액 중도금 (60%) 잔금 (30%)",
+  "계약금 (10%) 1 차 (10%) 2 차 (10%) 3 차 (10%) 4 차 (10%) 5 차 (10%) 6 차 (10%)",
+  "2027.01.30. 2027.05.31. 2027.10.29. 2028.03.30. 2028.08.30. 2029.01.30.",
+  priceLine("5~9 층",6,682000000),
+  `36 20 ${priceLine("10~14 층",9,692400000)}`,
+  priceLine("15~19 층",5,695900000),
+  priceLine("2 층",7,1187700000),
+  priceLine("3 층",7,1194000000),
+  priceLine("4 층",7,1215500000),
+  "59A 71",
+  priceLine("5~9 층",35,1238200000),
+  priceLine("10~14 층",10,1257200000),
+  priceLine("15~18 층",5,1263500000),
+  priceLine("2 층",3,1167500000),
+  priceLine("3 층",3,1173700000),
+  priceLine("4 층",3,1194800000),
+  "59B 42",
+  priceLine("5~9 층",15,1217200000),
+  priceLine("10~14 층",7,1235800000),
+  priceLine("15~20 층",11,1242000000),
+  `84A 2 ${priceLine("20 층",2,1499100000)}`
+];
+const parsedPdfJsSpacing=R.parsePaymentData(pdfJsSpacingFixture,[{name:"36",total:20},{name:"59A",total:71},{name:"59B",total:42},{name:"84A",total:2}]);
+assert.deepStrictEqual(parsedPdfJsSpacing.pricing.map(row=>({size:row.size,min:row.min,max:row.max})),[
+  {size:"36",min:682000000,max:695900000},
+  {size:"59A",min:1187700000,max:1263500000},
+  {size:"59B",min:1167500000,max:1242000000},
+  {size:"84A",min:1499100000,max:1499100000}
 ]);
 const billionSchedule=[{kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},...Array.from({length:6},(_,index)=>({kind:"interim",label:`중도금 ${index+1}차`,rate:10,dueDate:`2027-0${index+1}-01`,dueLabel:""})),{kind:"balance",label:"잔금",rate:30,dueDate:"",dueLabel:"입주 지정일"}];
 const funding=R.buildFundingPlan({baseDate:"2026-01-01",price:1000000000,extras:0,cashNow:200000000,reserve:50000000,monthlySaving:0,contractDate:"2026-08-01",moveInDate:"2029-05-01",interimLoanRate:100,mortgageLtv:40,payments:billionSchedule});
