@@ -128,4 +128,16 @@ assert.strictEqual(funding.totalOwn,600000000);
 assert.strictEqual(funding.worstShortage,450000000);
 assert.strictEqual(funding.firstShortage.label,"잔금");
 
+const sixCategorySupply=R.parseSupplyRows([
+  "기관추천 다자녀 신혼부부 노부모부양 생애최초 신생아 특별공급 계 일반공급 최하층",
+  "059.9667 59A 71 7 7 10 2 5 7 38 33 1"
+]);
+assert.deepStrictEqual(sixCategorySupply,[{name:"59A",area:59.9667,total:71,agency:7,multi:7,newly:10,elder:2,first:5,baby:7,general:33}]);
+const twoCategorySupply=R.parseSupplyRows([
+  "다자녀 노부모부양 특별공급 계 일반공급 최하층",
+  "100.1234 100 10 5 15 85 1"
+]);
+assert.deepStrictEqual(twoCategorySupply,[{name:"100",area:100.1234,total:100,agency:0,multi:10,newly:0,elder:5,first:0,baby:0,general:85}]);
+const exactFunding=R.buildFundingPlan({price:1000000000,cashNow:1000000000,payments:[{kind:"contract",label:"계약금 1차",rate:1,fixedAmount:12345678}]});
+assert.strictEqual(exactFunding.rows[0].scheduled,12345678);
 console.log("rules.test.js: allocation, scoring, income, profile, payment parsing and funding checks passed");

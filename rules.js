@@ -50,82 +50,273 @@
     return [1,2,3].filter(stage=>stage>=first&&integer(allocation?.[`stage${stage}`])>0);
   }
 
-  function parsePaymentData(lines,sizeNames=[]){
-    const clean=(lines||[]).map(line=>String(line||"").replace(/[–—]/g,"-").replace(/\s+/g," ").trim()).filter(Boolean);
-    const start=clean.findIndex(line=>/공급금액.*납부일정|분양대금.*납부일정/.test(line));
-    if(start<0)return {pricing:[],payments:[],confidence:0};
-    const section=clean.slice(start,start+180);
-    const header=section.slice(0,14).join(" ");
-    const rate=(label,fallback)=>{
-      const match=header.match(new RegExp(label+"\\s*\\(?\\s*(\\d+(?:\\.\\d+)?)\\s*%"));
-      return match?Number(match[1]):fallback;
-    };
-    const contractRate=rate("계약금",10),interimTotal=rate("중도금",60),balanceRate=rate("잔금",30);
-    const installmentRates=[...header.matchAll(/\d+차\s*\(\s*(\d+(?:\.\d+)?)\s*%\s*\)/g)].map(match=>Number(match[1]));
-    const dates=[...header.matchAll(/(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/g)].map(match=>normalizeDate(`${match[1]}-${match[2]}-${match[3]}`)).filter(Boolean);
-    const count=Math.max(installmentRates.length,dates.length,interimTotal?1:0);
-    const perRate=count?interimTotal/count:0;
-    const payments=[{kind:"contract",label:"계약금",rate:contractRate,dueDate:"",dueLabel:"계약 시"}];
-    for(let index=0;index<count;index++)payments.push({kind:"interim",label:`중도금 ${index+1}차`,rate:installmentRates[index]??perRate,dueDate:dates[index]||"",dueLabel:dates[index]?"":"공고문 확인"});
-    payments.push({kind:"balance",label:"잔금",rate:balanceRate,dueDate:"",dueLabel:"입주 지정일"});
-
-    const orderedSizes=[];
-    (sizeNames||[]).forEach(item=>{
-      const size=typeof item==="object"?String(item.name||item.size||""):String(item);
-      if(size&&!orderedSizes.some(row=>row.size===size))orderedSizes.push({size,total:typeof item==="object"?integer(item.total):0});
-    });
-    const orderedNames=orderedSizes.map(row=>row.size);
-    const names=[...orderedNames].sort((a,b)=>b.length-a.length);
-    const moneyValues=line=>[...line.matchAll(/\d{1,3}(?:,\d{3}){2,}|\b\d{9,}\b/g)].map(match=>Number(match[0].replace(/,/g,""))).filter(value=>value>=10000000&&value<=10000000000);
-    const near=(value,target)=>Math.abs(value-target)<=Math.max(1000,target*.002);
-    const entries=section.map((line,lineIndex)=>{
-      const amounts=moneyValues(line);
-      const price=amounts.find(candidate=>amounts.some(value=>near(value,candidate*.1))&&amounts.some(value=>near(value,candidate*.3)));
-      const unitMatch=line.match(/(?:\d+(?:~|-)\d+|\d+)\s*층\s+(\d+)/);
-      return price?{line,lineIndex,price,units:unitMatch?integer(unitMatch[1]):0}:null;
-    }).filter(Boolean);
-    const options=new Map(orderedNames.map(name=>[name,new Set()]));
-    const canGroupByUnits=orderedSizes.length&&orderedSizes.every(row=>row.total>0)&&entries.some(row=>row.units>0);
-    let groupedByUnits=false;
-    if(canGroupByUnits&&entries.every(row=>row.units>0)){
-      let cursor=0;
-      let valid=true;
-      const grouped=new Map(orderedNames.map(name=>[name,new Set()]));
-      for(const size of orderedSizes){
-        let assignedUnits=0;
-        while(cursor<entries.length&&assignedUnits<size.total){
-          const entry=entries[cursor];
-          if(assignedUnits+entry.units>size.total){valid=false;break}
-          cursor++;
-          grouped.get(size.size)?.add(entry.price);
-          assignedUnits+=entry.units;
-        }
-        if(!valid||assignedUnits!==size.total){valid=false;break}
-      }
-      if(valid){
-        grouped.forEach((values,name)=>values.forEach(value=>options.get(name)?.add(value)));
-        groupedByUnits=true;
-      }
-    }
-    if(!groupedByUnits&&!canGroupByUnits){
-      let currentSize="";
-      section.forEach(line=>{
-        const foundName=names.find(name=>new RegExp(`(?:^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?:\\s|$)`).test(line));
-        if(foundName)currentSize=foundName;
-        if(!currentSize)return;
-        const amounts=moneyValues(line);
-        const price=amounts.find(candidate=>amounts.some(value=>near(value,candidate*.1))&&amounts.some(value=>near(value,candidate*.3)));
-        if(price)options.get(currentSize)?.add(price);
-      });
-    }
-    const pricing=orderedNames.map(size=>{
-      const values=[...(options.get(size)||[])].sort((a,b)=>a-b);
-      return {size,min:values[0]||0,max:values.at(-1)||0,options:values};
-    }).filter(row=>row.max>0);
-    const confidence=Math.min(100,(dates.length?35:0)+(pricing.length?45:0)+(payments.length>=3?20:0));
-    return {pricing,payments,confidence};
+  function normalizeSplitDecimals(line){
+    return String(line||"")
+      .replace(/\b0\s+(\d{2,3})\.(\d{2})\s+(\d{2})([A-Z])\b/g,"0$1.$2$3$4")
+      .replace(/\b0\s+(\d{2,3})\.(\d{2})\s+(\d{2})\b/g,"0$1.$2$3")
+      .replace(/\b(\d{2,3})\.(\d{2})\s+(\d{2})([A-Z])\b/g,"$1.$2$3$4")
+      .replace(/\b(\d{2,3})\.(\d{2})\s+(\d{2})\b/g,"$1.$2$3");
   }
 
+  function supplySchema(lines,rowIndex,count){
+    const header=(lines||[]).slice(Math.max(0,rowIndex-18),rowIndex).join(" ");
+    const definitions=[
+      {key:"agency",pattern:/기관|추천/},{key:"multi",pattern:/다자녀/},{key:"newly",pattern:/신혼/},
+      {key:"elder",pattern:/노부모/},{key:"first",pattern:/생애/},{key:"baby",pattern:/신생아/}
+    ];
+    const found=definitions.map(item=>({key:item.key,index:header.search(item.pattern)})).filter(item=>item.index>=0).sort((a,b)=>a.index-b.index).map(item=>item.key);
+    const fallback={2:["multi","elder"],3:["agency","multi","elder"],4:["agency","multi","newly","elder"],5:["agency","multi","newly","elder","first"],6:["agency","multi","newly","elder","first","baby"]}[count]||[];
+    return found.length===count?found:fallback;
+  }
+
+  function parseSupplyRows(lines){
+    const found=new Map();
+    (lines||[]).forEach((raw,rowIndex)=>{
+      const tokens=normalizeSplitDecimals(raw).replace(/,/g,"").replace(/[–—]/g,"-").split(/\s+/).filter(Boolean);
+      let candidate=null;
+      for(let length=10;length>=6&&!candidate;length--){
+        for(let start=tokens.length-length;start>=0;start--){
+          const window=tokens.slice(start,start+length);
+          if(!window.every(token=>token==="-"||/^\d+$/.test(token)))continue;
+          const values=window.map(token=>token==="-"?0:Number(token));
+          const total=values[0],special=values[length-3],general=values[length-2],lowest=values[length-1],categories=values.slice(1,length-3);
+          if(total>0&&total<=10000&&special===categories.reduce((value,current)=>value+current,0)&&total===special+general&&lowest<=total){
+            candidate={start,total,special,general,lowest,categories};
+            break;
+          }
+        }
+      }
+      if(!candidate)return;
+      const prefix=tokens.slice(0,candidate.start).join(" ");
+      const areas=[...prefix.matchAll(/\b0?(\d{2,3})\.(\d{2,4})([A-Z])?\b/g)].filter(match=>Number(match[1])>=20&&Number(match[1])<=400);
+      if(!areas.length)return;
+      const match=areas[0],base=String(Number(match[1])),suffix=match[3]||"";
+      const after=prefix.slice((match.index||0)+match[0].length).trim();
+      const short=after.match(new RegExp(`^${base}([A-Z][A-Z0-9]*)\\b`));
+      const name=base+(suffix||short?.[1]||"");
+      const row={name,area:Number(`${Number(match[1])}.${match[2]}`),total:candidate.total,agency:0,multi:0,newly:0,elder:0,first:0,baby:0,general:candidate.general};
+      supplySchema(lines,rowIndex,candidate.categories.length).forEach((key,index)=>row[key]=candidate.categories[index]||0);
+      if(!found.has(name))found.set(name,row);
+    });
+    return [...found.values()];
+  }
+
+  function moneyValues(line){
+    return [...String(line||"").matchAll(/\d{1,3}(?:,\d{3}){2,}|\b\d{8,}\b/g)]
+      .map(match=>({value:Number(match[0].replace(/,/g,"")),index:match.index}))
+      .filter(item=>item.value>=10000000&&item.value<=100000000000);
+  }
+
+  function priceEntry(line,lineIndex){
+    const money=moneyValues(line);
+    for(let index=2;index<Math.min(money.length,6);index++){
+      for(const count of [3,2]){
+        if(index-count<0)continue;
+        const partTotal=money.slice(index-count,index).reduce((value,current)=>value+current.value,0);
+        const price=money[index].value;
+        if(Math.abs(partTotal-price)>Math.max(2000,price*.001))continue;
+        const paymentAmounts=money.slice(index+1).map(item=>item.value);
+        const paymentTotal=paymentAmounts.reduce((value,current)=>value+current,0);
+        return {lineIndex,line,price,paymentAmounts:Math.abs(paymentTotal-price)<=Math.max(5000,price*.001)?paymentAmounts:[],moneyStart:money[0].index};
+      }
+    }
+    return null;
+  }
+
+  function canonicalSize(token,sizes){
+    const clean=String(token||"").replace(/^0+(?=\d)/,"").toUpperCase();
+    const exact=sizes.find(size=>size.name.toUpperCase()===clean);
+    if(exact)return exact.name;
+    const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const digitSuffix=sizes.find(size=>new RegExp(`^${escaped(size.name.toUpperCase())}\\d+$`).test(clean));
+    if(digitSuffix)return digitSuffix.name;
+    const tokenMatch=clean.match(/^(\d{2,3})([A-Z0-9]*)$/);
+    if(!tokenMatch)return "";
+    const base=tokenMatch[1],suffix=tokenMatch[2];
+    const sameBase=sizes.filter(size=>size.name.match(/^\d{2,3}/)?.[0]===base);
+    const fuzzy=sameBase.filter(size=>{
+      const sizeSuffix=size.name.slice(base.length).toUpperCase();
+      return sizeSuffix&&sizeSuffix.replace(/P/g,"")===suffix.replace(/P/g,"");
+    });
+    if(fuzzy.length===1)return fuzzy[0].name;
+    if(sameBase.length===1&&sameBase[0].name===base&&suffix)return sameBase[0].name;
+    return "";
+  }
+
+  function typeMarkers(section,sizes){
+    const markers=[];
+    section.forEach((line,lineIndex)=>{
+      const firstMoney=moneyValues(line)[0]?.index??line.length;
+      const prefix=line.slice(0,firstMoney),tokens=[];
+      for(const match of prefix.matchAll(/\b0?(\d{2,3})\.\d{2,4}([A-Z])?\b/g))tokens.push(String(Number(match[1]))+(match[2]||""));
+      for(const match of prefix.matchAll(/\b\d{2,3}[A-Z][A-Z0-9]*\b|\b\d{2,3}\b(?!\s*(?:동|호|층|F))/g))tokens.push(match[0]);
+      [...new Set(tokens.map(token=>canonicalSize(token,sizes)).filter(Boolean))].forEach(name=>markers.push({name,lineIndex,line}));
+    });
+    return markers;
+  }
+
+  function entryClusters(entries){
+    const clusters=[];
+    entries.forEach(entry=>{
+      const last=clusters.at(-1);
+      if(!last||entry.lineIndex-last.at(-1).lineIndex>30)clusters.push([entry]);
+      else last.push(entry);
+    });
+    return clusters;
+  }
+
+  function unitsForPriceEntry(entry){
+    const prefix=entry.line.slice(0,entry.moneyStart).trim();
+    let match=prefix.match(/(?:층|F)\s*(?:이상|이하)?\s*(\d+)\s*$/i);
+    if(match)return Number(match[1]);
+    match=prefix.match(/([\d,]+)\s*호\s*$/);
+    if(match)return match[1].split(",").filter(Boolean).length;
+    if(/(?:^|\s)\d{3,4}\s*$/.test(prefix))return 1;
+    match=prefix.match(/(?:^|\s)(\d+)\s*$/);
+    return match&&Number(match[1])<=200?Number(match[1]):0;
+  }
+
+  function paymentSection(lines,sizes){
+    const start=(lines||[]).findIndex(line=>/공급금액.*(?:납부일정|표)|분양금액.*(?:납부일정|표)|공급대상.*공급금액/.test(line));
+    if(start<0)return null;
+    const section=lines.slice(start,start+650);
+    const entries=section.map((line,index)=>priceEntry(line,index)).filter(Boolean);
+    const clusters=entryClusters(entries);
+    if(!clusters.length)return null;
+    const main=[...clusters].sort((a,b)=>b.length-a.length)[0];
+    const markers=typeMarkers(section,sizes).filter(marker=>main.some(entry=>Math.abs(entry.lineIndex-marker.lineIndex)<=25));
+    return {section,entries:main,markers};
+  }
+
+  function groupPriceEntries(data,sizes,strict=true){
+    const entries=data.entries,low=entries[0].lineIndex,high=entries.at(-1).lineIndex;
+    const markers=data.markers.filter(marker=>marker.lineIndex>=low-20&&marker.lineIndex<=high+20);
+    const ordered=sizes.map((size,supplyIndex)=>{
+      const candidates=markers.filter(marker=>marker.name===size.name);
+      const best=candidates.reduce((prior,marker)=>{
+        const official=/\b0?\d{2,3}\.\d{2,4}[A-Z]?\b/.test(marker.line);
+        const distance=Math.min(...entries.map(entry=>Math.abs(entry.lineIndex-marker.lineIndex)))-(strict?0:official?5:0);
+        return !prior||distance<prior.distance?{lineIndex:marker.lineIndex,distance}:prior;
+      },null);
+      return {...size,supplyIndex,marker:best?.lineIndex??Number.MAX_SAFE_INTEGER};
+    }).sort((a,b)=>a.marker-b.marker||a.supplyIndex-b.supplyIndex);
+    const typeCount=ordered.length,entryCount=entries.length;
+    const dp=Array.from({length:typeCount+1},()=>Array(entryCount+1).fill(null));
+    dp[0][0]={cost:0,previous:-1};
+    for(let typeIndex=0;typeIndex<typeCount;typeIndex++){
+      const type=ordered[typeIndex];
+      for(let start=0;start<=entryCount;start++){
+        const state=dp[typeIndex][start];
+        if(!state)continue;
+        let known=0,unknown=0;
+        const maxEnd=entryCount-(typeCount-typeIndex-1);
+        for(let end=start+1;end<=maxEnd;end++){
+          const units=unitsForPriceEntry(entries[end-1]);
+          if(units)known+=units;else unknown++;
+          if(strict&&known>type.total)break;
+          if(strict){
+            const feasible=unknown?known+unknown<=type.total:known===type.total;
+            if(!feasible)continue;
+          }
+          const firstLine=entries[start].lineIndex,lastLine=entries[end-1].lineIndex;
+          const rangeDistance=type.marker<firstLine?firstLine-type.marker:type.marker>lastLine?type.marker-lastLine:0;
+          const center=(firstLine+lastLine)/2;
+          const unitPenalty=strict?(unknown?Math.abs((type.total-known)-unknown)*.01:0):Math.abs(type.total-known)*2;
+          const cost=state.cost+rangeDistance*(strict?20:30)+Math.abs(type.marker-center)*(strict?.1:.2)+unitPenalty;
+          const prior=dp[typeIndex+1][end];
+          if(!prior||cost<prior.cost)dp[typeIndex+1][end]={cost,previous:start};
+        }
+      }
+    }
+    if(!dp[typeCount][entryCount])return null;
+    const groups=[];
+    let end=entryCount;
+    for(let typeIndex=typeCount;typeIndex>0;typeIndex--){
+      const state=dp[typeIndex][end],start=state.previous;
+      groups.push({type:ordered[typeIndex-1],entries:entries.slice(start,end)});
+      end=start;
+    }
+    return groups.reverse();
+  }
+
+  function paymentHeader(data){
+    const firstLine=data.entries[0].lineIndex;
+    const header=data.section.slice(Math.max(0,firstLine-35),firstLine).join(" ");
+    const rate=label=>{
+      const match=header.match(new RegExp(label+"\\s*\\(?\\s*(\\d+(?:\\.\\d+)?)\\s*%"));
+      return match?Number(match[1]):0;
+    };
+    const interim=rate("중도금");
+    const numbered=[...header.matchAll(/\d+\s*(?:차|회)\s*\(\s*(\d+(?:\.\d+)?)\s*%\s*\)/g)].map(match=>Number(match[1]));
+    let rates=[];
+    for(let start=numbered.length-1;start>=0;start--){
+      const tail=numbered.slice(start);
+      if(Math.abs(tail.reduce((value,current)=>value+current,0)-interim)<.01){rates=tail;break}
+    }
+    const allDates=[...header.matchAll(/(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/g)].map(match=>normalizeDate(`${match[1]}-${match[2]}-${match[3]}`)).filter(Boolean);
+    return {interim,rates,allDates};
+  }
+
+  function buildPaymentRows(data,details){
+    const detail=details.find(item=>item.paymentAmounts.length);
+    const representative=detail?.paymentAmounts||[];
+    if(representative.length<2)return [];
+    const header=paymentHeader(data),beforeBalance=representative.slice(0,-1);
+    let interimCount=0;
+    if(header.interim>0){
+      for(let start=beforeBalance.length-1;start>=0;start--){
+        const total=beforeBalance.slice(start).reduce((value,current)=>value+current,0);
+        if(Math.abs(total-detail.price*header.interim/100)<=Math.max(5000,detail.price*.001)){interimCount=beforeBalance.length-start;break}
+      }
+    }
+    if(!interimCount&&header.rates.length&&header.rates.length<=representative.length-2)interimCount=header.rates.length;
+    if(!interimCount&&header.allDates.length)interimCount=Math.min(representative.length-2,header.allDates.length);
+    const contractCount=Math.max(1,representative.length-interimCount-1);
+    const interimDates=header.allDates.slice(-interimCount);
+    const contractDates=header.allDates.slice(0,Math.max(0,header.allDates.length-interimCount));
+    return representative.map((amount,slot)=>{
+      let kind,label,dueDate="",dueLabel="";
+      if(slot<contractCount){
+        kind="contract";label=contractCount===1?"계약금":`계약금 ${slot+1}차`;
+        dueDate=slot?contractDates.at(-1)||"":"";dueLabel=slot?(dueDate?"":"공고문 계약기한"):"계약 시";
+      }else if(slot<contractCount+interimCount){
+        const index=slot-contractCount;
+        kind="interim";label=`중도금 ${index+1}차`;dueDate=interimDates[index]||"";dueLabel=dueDate?"":"공고문 확인";
+      }else{kind="balance";label="잔금";dueLabel="입주 지정일"}
+      return {kind,label,rate:detail.price?amount/detail.price*100:0,dueDate,dueLabel,slot};
+    });
+  }
+
+  function parsePaymentData(lines,sizeNames=[]){
+    const clean=(lines||[]).map(line=>normalizeSplitDecimals(line).replace(/[–—]/g,"-").replace(/\s+/g," ").trim()).filter(Boolean);
+    const sizes=[];
+    (sizeNames||[]).forEach(item=>{
+      const name=typeof item==="object"?String(item.name||item.size||""):String(item);
+      if(name&&!sizes.some(row=>row.name===name))sizes.push({name,total:typeof item==="object"?integer(item.total):0});
+    });
+    if(!sizes.length)return {pricing:[],payments:[],confidence:0};
+    const data=paymentSection(clean,sizes);
+    if(!data)return {pricing:[],payments:[],confidence:0};
+    const groups=groupPriceEntries(data,sizes,true)||groupPriceEntries(data,sizes,false);
+    if(!groups)return {pricing:[],payments:[],confidence:0};
+    const byName=new Map(groups.map(group=>[group.type.name,group.entries]));
+    const pricing=sizes.map(size=>{
+      const detailMap=new Map();
+      (byName.get(size.name)||[]).forEach(entry=>{
+        const prior=detailMap.get(entry.price);
+        if(!prior||entry.paymentAmounts.length>prior.paymentAmounts.length)detailMap.set(entry.price,{price:entry.price,paymentAmounts:entry.paymentAmounts});
+      });
+      const details=[...detailMap.values()].sort((a,b)=>a.price-b.price);
+      const options=details.map(detail=>detail.price);
+      return {size:size.name,min:options[0]||0,max:options.at(-1)||0,options,details};
+    }).filter(row=>row.max>0);
+    const allDetails=pricing.flatMap(row=>row.details);
+    const payments=buildPaymentRows(data,allDetails);
+    const complete=pricing.length===sizes.length;
+    const exactPayments=allDetails.filter(detail=>detail.paymentAmounts.length>=2).length;
+    const confidence=Math.min(100,(complete?55:pricing.length?35:0)+(payments.length?25:0)+(exactPayments===allDetails.length?20:exactPayments?10:0));
+    return {pricing,payments,confidence};
+  }
   function buildFundingPlan(input){
     const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
     const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
@@ -139,7 +330,7 @@
     let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0;
     const usableStart=Math.max(0,cashNow-reserve);
     const rows=resolved.map(payment=>{
-      const scheduled=Math.round(price*payment.rate/100);
+      const scheduled=payment.fixedAmount!==undefined&&payment.fixedAmount!==null?won(payment.fixedAmount):Math.round(price*payment.rate/100);
       let gross=scheduled,financing=0,own=scheduled,note="자기자금 납부";
       if(payment.kind==="interim"){
         financing=Math.round(scheduled*interimLoanRate/100);
@@ -376,7 +567,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,parseSupplyRows,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

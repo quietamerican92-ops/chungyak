@@ -78,6 +78,8 @@
     if(!Array.isArray(target.payments)||!target.payments.length){
       target.payments=String(target.projectName||"").includes("월계 중흥")?clone(DEFAULT_NOTICE.payments):[];
     }
+    target.pricing=target.pricing.map(row=>({...row,options:Array.isArray(row.options)?row.options.map(value=>num(value)).filter(Boolean):[],details:Array.isArray(row.details)?row.details.map(detail=>({price:num(detail.price),paymentAmounts:Array.isArray(detail.paymentAmounts)?detail.paymentAmounts.map(value=>num(value)).filter(Boolean):[]})).filter(detail=>detail.price):[]}));
+    target.payments=target.payments.map((row,index)=>({...row,slot:Number.isInteger(Number(row.slot))?Number(row.slot):index}));
     target.paymentConfidence=num(target.paymentConfidence);
     return target;
   }
@@ -259,61 +261,41 @@
     renderProfileSummary();
   }
 
+  function joinPdfItems(items){
+    items.sort((a,b)=>a.x-b.x);
+    let output="",end=null;
+    items.forEach(item=>{
+      const gap=end===null?Infinity:item.x-end;
+      if(output&&gap>1.5)output+=" ";
+      output+=item.text;
+      end=item.x+num(item.width);
+    });
+    return output.replace(/\s+/g," ").trim();
+  }
+
   async function extractPdf(file){
     $("parseStatus").textContent="PDF 분석 도구를 불러오는 중…";
     const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.min.mjs");
     pdfjs.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
-    const pages=Math.min(pdf.numPages,25);
-    const lines=[];
+    const pages=Math.min(pdf.numPages,25),lines=[];
     for(let pageNo=1;pageNo<=pages;pageNo++){
-      $("parseStatus").textContent=`PDF ${pageNo}/${pages}쪽에서 공급표와 규칙을 찾는 중…`;
-      const page=await pdf.getPage(pageNo);
-      const content=await page.getTextContent();
-      const groups=[];
+      $("parseStatus").textContent=`PDF ${pageNo}/${pages}쪽에서 공급표·분양가·납부일정을 찾는 중…`;
+      const page=await pdf.getPage(pageNo),viewport=page.getViewport({scale:1}),content=await page.getTextContent(),groups=[];
       content.items.filter(item=>item.str?.trim()).forEach(item=>{
-        const y=Math.round(item.transform[5]*2)/2;
-        let group=groups.find(g=>Math.abs(g.y-y)<=1.5);
+        const transformed=pdfjs.Util.transform(viewport.transform,item.transform);
+        const y=Math.round(transformed[5]*2)/2;
+        let group=groups.find(current=>Math.abs(current.y-y)<=1.5);
         if(!group){group={y,items:[]};groups.push(group)}
-        group.items.push({x:item.transform[4],text:item.str.trim()});
+        group.items.push({x:transformed[4],width:item.width,text:item.str.trim()});
       });
-      groups.sort((a,b)=>b.y-a.y).forEach(group=>{
-        group.items.sort((a,b)=>a.x-b.x);
-        lines.push(group.items.map(item=>item.text).join(" ").replace(/\s+/g," ").trim());
+      groups.sort((a,b)=>a.y-b.y).forEach(group=>{
+        const line=joinPdfItems(group.items);
+        if(line)lines.push(line);
       });
     }
     return {lines,pages,totalPages:pdf.numPages};
   }
-
-  function parseSupplyRows(lines){
-    const candidates=[];
-    for(let i=0;i<lines.length;i++){
-      candidates.push(lines[i]);
-      if(i+1<lines.length)candidates.push(lines[i]+" "+lines[i+1]);
-    }
-    const found=new Map();
-    candidates.forEach(line=>{
-      const tokens=line.replace(/,/g,"").replace(/[–—]/g,"-").split(/\s+/).filter(Boolean);
-      for(let start=0;start<=tokens.length-10;start++){
-        const tail=tokens.slice(start,start+10);
-        if(!tail.every(token=>token==="-"||/^\d+$/.test(token)))continue;
-        const values=tail.map(token=>token==="-"?0:Number(token));
-        const [total,agency,multi,newly,elder,first,baby,specialTotal,general]=values;
-        if(total<=0||total>10000||specialTotal!==agency+multi+newly+elder+first+baby||total!==specialTotal+general)continue;
-        const prefix=tokens.slice(0,start);
-        let name=prefix.filter(token=>/^\d{2,3}[A-Z]?$/.test(token)&&num(token.replace(/[A-Z]/g,""))>=20&&num(token.replace(/[A-Z]/g,""))<=200).pop();
-        const full=prefix.find(token=>/^0?\d{2,3}\.\d{2,}[A-Z]?$/.test(token)&&num(token)>=20&&num(token)<=200);
-        if(!name&&full){const m=full.match(/^0?(\d{2,3})\.\d+([A-Z]?)$/);if(m)name=String(Number(m[1]))+m[2]}
-        if(!name)continue;
-        const area=full?num(full.replace(/[A-Z]/g,"")):num(name.replace(/[A-Z]/g,""));
-        const row={name,area,total,agency,multi,newly,elder,first,baby,general};
-        const prior=found.get(name);
-        if(!prior||prefix.length<prior._prefix){row._prefix=prefix.length;found.set(name,row)}
-      }
-    });
-    return [...found.values()].map(({_prefix,...row})=>row).sort((a,b)=>a.area-b.area||a.name.localeCompare(b.name));
-  }
-
   function parseAnnouncement(lines,fileName){
     const text=lines.join("\n");
     const projectLine=lines.find(line=>/입주자\s*모집공고/.test(line)&&line.length<90&&!/최초|현재|공고일/.test(line));
@@ -329,7 +311,7 @@
     else if(/인천광역시\s*\d+년\s*이상/.test(text))priorityRegion="인천광역시";
     else if(/경기도\s*\d+년\s*이상/.test(text))priorityRegion="경기도";
     const yearMatch=text.match(new RegExp((priorityRegion||"해당지역").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*(\\d+)년\\s*이상"));
-    const sizes=parseSupplyRows(lines);
+    const sizes=R.parseSupplyRows(lines);
     const oldByName=new Map(notice.sizes.map(row=>[row.name,row]));
     const merged=sizes.map(row=>oldByName.has(row.name)?{...oldByName.get(row.name),...row}:row);
     if(projectName.includes("월계 중흥")&&!merged.some(row=>row.name==="84A"))merged.push(clone(DEFAULT_NOTICE.sizes.find(row=>row.name==="84A")));
@@ -526,7 +508,15 @@
   function fundingInput(){
     const now=new Date();
     const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-    return {baseDate:today,price:num($("planPrice").value),extras:num($("planExtras").value),cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate:R.normalizeDate($("contractDate").value),moveInDate:R.normalizeDate($("moveInDate").value),interimLoanRate:num($("interimLoanRate").value),mortgageLtv:num($("mortgageLtv").value),payments:notice.payments};
+    const price=num($("planPrice").value),size=$("planSize").value;
+    const pricing=notice.pricing.find(row=>row.size===size);
+    const detail=pricing?.details?.find(row=>num(row.price)===price&&Array.isArray(row.paymentAmounts));
+    const payments=(notice.payments||[]).map((payment,index)=>{
+      const slot=Number.isInteger(Number(payment.slot))?Number(payment.slot):index;
+      const fixedAmount=detail?.paymentAmounts?.[slot];
+      return fixedAmount===undefined?payment:{...payment,fixedAmount,rate:price?fixedAmount/price*100:num(payment.rate)};
+    });
+    return {baseDate:today,price,extras:num($("planExtras").value),cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate:R.normalizeDate($("contractDate").value),moveInDate:R.normalizeDate($("moveInDate").value),interimLoanRate:num($("interimLoanRate").value),mortgageLtv:num($("mortgageLtv").value),payments};
   }
   function renderFundingPlan(){
     const input=fundingInput();
@@ -585,12 +575,12 @@
   $("priceRows").addEventListener("input",event=>{
     const input=event.target.closest("[data-price-field]");if(!input)return;
     const index=num(input.closest("tr").dataset.priceIndex),field=input.dataset.priceField;
-    notice.pricing[index][field]=num(input.value);markUnverified();renderFinanceControls();
+    notice.pricing[index][field]=num(input.value);notice.pricing[index].details=[];markUnverified();renderFinanceControls();
   });
   $("paymentRows").addEventListener("input",event=>{
     const input=event.target.closest("[data-payment-field]");if(!input)return;
     const index=num(input.closest("tr").dataset.paymentIndex),field=input.dataset.paymentField;
-    notice.payments[index][field]=field==="rate"?num(input.value):input.value;
+    notice.payments[index][field]=field==="rate"?num(input.value):input.value;notice.pricing.forEach(row=>row.details=[]);
     markUnverified();
     const total=notice.payments.reduce((value,row)=>value+num(row.rate),0);
     $("paymentTotal").innerHTML=`<tr><td colspan="2">합계</td><td class="num-cell">${total.toFixed(1)}%</td><td colspan="3">${Math.abs(total-100)<.01?"분양대금 100%":"비율 합계 확인 필요"}</td></tr>`;
