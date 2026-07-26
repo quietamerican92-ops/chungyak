@@ -281,41 +281,68 @@
 
     <section id="finance" class="panel">
       <div class="section-head">
-        <div><span class="kicker">FUNDING PLAN</span><h2>계약금·중도금·잔금 자금 플랜</h2></div>
+        <div><span class="kicker">FUNDING PLAN</span><h2>당첨 이후, 돈이 필요한 순간을 한눈에</h2></div>
         <button class="ghost" data-go="notice">납부일정 수정</button>
       </div>
 
       <div id="financeWarning"></div>
 
       <article class="card funding-input-card">
-        <div class="card-head"><div><h3>가정 입력</h3><p>당첨될 주택형과 예상 대출조건을 보수적으로 입력하세요.</p></div><span class="rounding">기기 안에 자동 저장</span></div>
-        <div class="funding-grid">
+        <div class="card-head"><div><h3>내 자금과 대출 가정</h3><p>공고문에서 읽은 납부회차에 내 현금·저축·대출 조건을 겹쳐 계산합니다.</p></div><span class="rounding">입력값 자동 저장</span></div>
+        <div class="funding-grid core-funding-grid">
           <label>선택 주택형<select id="planSize"></select></label>
-          <label>계산 기준 분양가<input id="planPrice" type="number" min="0" step="1000000"><span class="suffix">원</span><small class="field-help">기본값은 해당 평형 최고 분양가</small></label>
-          <label>발코니·옵션·취득비용<input id="planExtras" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
-          <label>현재 가용현금<input id="cashNow" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
-          <label>남겨둘 비상예비자금<input id="cashReserve" type="number" min="0" step="1000000" value="0"><span class="suffix">원</span></label>
-          <label>월 추가저축 가능액<input id="monthlySaving" type="number" min="0" step="100000" value="0"><span class="suffix">원</span></label>
+          <label>계산 기준 분양가<input id="planPrice" class="money-input" type="text" inputmode="numeric" autocomplete="off"><span class="suffix">원</span><small class="field-help">해당 주택형 최고 분양가가 기본값</small></label>
+          <label>발코니·옵션·등기 등<input id="planExtras" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">취득세는 아래에서 별도 자동 계산</small></label>
+          <label>현재 가용현금<input id="cashNow" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>남겨둘 비상예비자금<input id="cashReserve" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>월 추가저축 가능액<input id="monthlySaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>예상 계약일<input id="contractDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
           <label>예상 입주·잔금일<input id="moveInDate" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
-          <label>중도금 회차별 대출비율<input id="interimLoanRate" type="number" min="0" max="100" value="0"><span class="suffix">%</span><small class="field-help">협약은행 확인 전에는 0%로 보수 계산</small></label>
-          <label>입주시 예상 주담대 LTV<input id="mortgageLtv" type="number" min="0" max="100" value="0"><span class="suffix">%</span><small class="field-help">은행 사전상담 결과를 직접 입력</small></label>
         </div>
-        <button id="calculateFunding" class="primary funding-button">자금 플랜 다시 계산</button>
+
+        <div class="assumption-panels">
+          <section class="assumption-panel loan-assumption">
+            <div class="assumption-title"><span>01</span><div><h4>대출과 중도금 이자</h4><p>실행비율뿐 아니라 입주 때 한꺼번에 낼 후불이자까지 추정합니다.</p></div></div>
+            <div class="funding-grid compact-funding-grid">
+              <label>중도금 회차별 대출비율<input id="interimLoanRate" type="number" min="0" max="100" value="0"><span class="suffix">%</span></label>
+              <label>중도금 예상 연이율<input id="interimInterestRate" type="number" min="0" max="30" step="0.1" value="0"><span class="suffix">%</span></label>
+              <label>입주시 예상 주담대 LTV<input id="mortgageLtv" type="number" min="0" max="100" value="0"><span class="suffix">%</span></label>
+              <label class="choice-toggle"><input id="includeInterimInterest" type="checkbox" checked><span><b>이자후불제 반영</b><small>각 실행일부터 잔금일까지 단리 추정</small></span></label>
+            </div>
+          </section>
+
+          <section class="assumption-panel tax-assumption">
+            <div class="assumption-title"><span>02</span><div><h4>잔금일 취득부대세</h4><p>취득세·지방교육세·농어촌특별세를 잔금 필요자금에 포함합니다.</p></div></div>
+            <div class="funding-grid compact-funding-grid">
+              <label>세율 적용 방식<select id="taxMode"><option value="standard">무주택·1주택 기본세율</option><option value="first_home">생애최초 감면 예상</option><option value="manual">총 세율 직접 입력</option></select></label>
+              <label>직접 입력 총 세율<input id="taxManualRate" type="number" min="0" max="20" step="0.01" value="3.3"><span class="suffix">%</span></label>
+              <label class="choice-toggle"><input id="includeAcquisitionTax" type="checkbox" checked><span><b>잔금 필요액에 포함</b><small>세금은 잔금·입주 단계에 합산</small></span></label>
+              <div id="taxPreview" class="tax-preview"></div>
+            </div>
+          </section>
+        </div>
+        <button id="calculateFunding" class="primary funding-button">내 조건으로 자금 플랜 계산</button>
       </article>
 
+      <div id="fundingHero"></div>
       <div id="fundingSummary" class="funding-summary"></div>
 
-      <article class="card result-card">
-        <div class="card-head"><div><h3>날짜별 자금 타임라인</h3><p>중도금 대출은 입주 시 주담대로 상환·전환되는 것으로 단순 계산합니다.</p></div><span class="rounding">부족 시점 자동 표시</span></div>
-        <div id="fundingTimeline" class="table-wrap"></div>
+      <article class="card phase-card">
+        <div class="card-head"><div><h3>계약 → 중도금 → 입주 3단계</h3><p>각 단계에서 실제로 내 돈과 대출이 얼마나 들어가는지 묶어 보여줍니다.</p></div><span class="rounding">대출·자기자금 분리</span></div>
+        <div id="fundingPhases" class="funding-phases"></div>
+      </article>
+
+      <article class="card result-card timeline-card">
+        <div class="card-head"><div><h3>현금흐름 타임라인</h3><p>회차별 납부액, 대출 투입, 누적 저축과 납부 후 남는 현금을 순서대로 봅니다.</p></div><span class="rounding">부족 최초 시점 강조</span></div>
+        <div id="fundingTimeline"></div>
       </article>
 
       <details class="legal-note" open>
-        <summary>자금 플랜에서 반드시 확인할 점</summary>
+        <summary>계산 기준과 꼭 확인할 사항</summary>
         <div>
-          <p>입력한 LTV는 예상치이며 실제 대출가능액은 담보평가액, DSR, 소득, 기존대출, 금융기관 심사와 규제에 따라 달라집니다.</p>
-          <p>중도금대출은 보장되지 않으며 이자·보증료·인지세·취득세·등기비용은 자동 추정하지 않습니다. 예상 부대비용란에 별도로 포함하세요.</p>
+          <p>기본 취득세는 2026년 지방세법상 주택 유상거래 세율을 적용하고, 지방교육세와 전용 85㎡ 초과 시 농어촌특별세를 더한 예상치입니다. 생애최초 감면·다주택 중과·지자체 감면 등은 실제 잔금일 요건과 위택스 계산 결과를 확인하세요.</p>
+          <p class="tax-source-links">공식 기준: <a href="https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&amp;joBrNo=00&amp;joNo=0011&amp;lsiSeq=282559&amp;urlMode=lsScJoRltInfoR" target="_blank" rel="noopener">지방세법 제11조</a> · <a href="https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&amp;lsJoLnkSeq=1026499929" target="_blank" rel="noopener">지방교육세 제151조</a> · <a href="https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&amp;lsJoLnkSeq=1025285313" target="_blank" rel="noopener">생애최초 감면</a></p>
+          <p>중도금 이자는 입력 연이율을 각 대출 실행일부터 예상 잔금일까지 단리로 추정합니다. 실제 이자율, 보증료, 인지세, DSR·LTV 및 대출 실행 여부는 금융기관 심사에 따라 달라집니다.</p>
         </div>
       </details>
       <div class="actions split"><button class="ghost" data-go="strategy">← 청약 전략</button><button class="ghost" data-go="notice">공고 숫자 다시 확인</button></div>

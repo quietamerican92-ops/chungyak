@@ -45,6 +45,27 @@
     return {total,stage1,stage2,stage3,firstRate:Number(firstRate),secondRate:Number(secondRate)};
   }
 
+  function acquisitionCostEstimate(price,area,options={}){
+    price=won(price);area=Number(area)||0;
+    const mode=options.mode||"standard";
+    if(mode==="manual"){
+      const totalRate=clamp(options.manualTotalRate,0,20);
+      const total=Math.round(price*totalRate/100);
+      return {price,area,mode,acquisitionTax:total,localEducationTax:0,ruralSpecialTax:0,discount:0,total,totalRate};
+    }
+    let acquisitionRate=price<=600000000?.01:price<=900000000?(((price*2/300000000)-3)/100):.03;
+    acquisitionRate=Math.round(acquisitionRate*1000000)/1000000;
+    const grossAcquisitionTax=Math.round(price*acquisitionRate);
+    const grossEducationTax=Math.round(price*acquisitionRate*.1);
+    const ruralSpecialTax=area>85?Math.round(price*.002):0;
+    const eligibleFirstHome=mode==="first_home"&&price<=1200000000;
+    const discount=eligibleFirstHome?Math.min(2000000,grossAcquisitionTax):0;
+    const discountRatio=grossAcquisitionTax?discount/grossAcquisitionTax:0;
+    const acquisitionTax=Math.max(0,grossAcquisitionTax-discount);
+    const localEducationTax=Math.max(0,Math.round(grossEducationTax*(1-discountRatio)));
+    const total=acquisitionTax+localEducationTax+ruralSpecialTax;
+    return {price,area,mode,acquisitionRate,grossAcquisitionTax,grossEducationTax,acquisitionTax,localEducationTax,ruralSpecialTax,discount,eligibleFirstHome,total,totalRate:price?total/price*100:0};
+  }
   function availableSpecialStages(entryStage,allocation){
     const first=Math.max(1,integer(entryStage));
     return [1,2,3].filter(stage=>stage>=first&&integer(allocation?.[`stage${stage}`])>0);
@@ -321,29 +342,39 @@
     const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
     const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
     const interimLoanRate=clamp(Number(input.interimLoanRate)||0,0,100),mortgageLtv=clamp(Number(input.mortgageLtv)||0,0,100);
+    const interimInterestRate=clamp(Number(input.interimInterestRate)||0,0,30),includeInterimInterest=Boolean(input.includeInterimInterest)&&interimInterestRate>0;
     const mortgageTarget=Math.round(price*mortgageLtv/100);
     const source=(input.payments||[]).map((payment,index)=>({...payment,index,rate:Number(payment.rate)||0}));
     const resolved=source.map(payment=>{
       const dueDate=normalizeDate(payment.dueDate)||(payment.kind==="contract"?contractDate:payment.kind==="balance"?moveInDate:"");
       return {...payment,dueDate,dueText:dueDate||payment.dueLabel||"날짜 확인"};
     }).sort((a,b)=>a.dueDate&&b.dueDate?a.dueDate.localeCompare(b.dueDate):a.dueDate?-1:b.dueDate?1:a.index-b.index);
-    let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0;
+    const balanceDate=moveInDate||resolved.find(payment=>payment.kind==="balance"&&payment.dueDate)?.dueDate||"";
+    let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0,deferredInterest=0,interestIncomplete=false;
     const usableStart=Math.max(0,cashNow-reserve);
     const rows=resolved.map(payment=>{
       const scheduled=payment.fixedAmount!==undefined&&payment.fixedAmount!==null?won(payment.fixedAmount):Math.round(price*payment.rate/100);
-      let gross=scheduled,financing=0,own=scheduled,note="자기자금 납부";
+      let gross=scheduled,financing=0,own=scheduled,note="자기자금 납부",interest=0,closingExtras=0;
       if(payment.kind==="interim"){
         financing=Math.round(scheduled*interimLoanRate/100);
         own=scheduled-financing;
         interimOutstanding+=financing;
         peakInterim=Math.max(peakInterim,interimOutstanding);
-        note=`중도금 대출 ${interimLoanRate.toFixed(0)}% 가정`;
+        if(includeInterimInterest&&financing){
+          if(payment.dueDate&&balanceDate){
+            const months=Math.max(0,monthsBetween(payment.dueDate,balanceDate));
+            interest=Math.round(financing*interimInterestRate/100*months/12);
+            deferredInterest+=interest;
+          }else interestIncomplete=true;
+        }
+        note=`중도금 대출 ${interimLoanRate.toFixed(0)}%${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`;
       }else if(payment.kind==="balance"){
         const closingNeed=scheduled+interimOutstanding;
         financing=Math.min(closingNeed,mortgageTarget);
-        own=Math.max(0,closingNeed-financing)+extras;
-        gross=scheduled+extras;
-        note=`주담대에서 중도금 대출 ${interimOutstanding.toLocaleString("ko-KR")}원 상환 포함`;
+        closingExtras=extras+deferredInterest;
+        own=Math.max(0,closingNeed-financing)+closingExtras;
+        gross=scheduled+closingExtras;
+        note=`주담대에서 중도금대출 ${interimOutstanding.toLocaleString("ko-KR")}원 상환${closingExtras?` · 세금·부대비용 ${closingExtras.toLocaleString("ko-KR")}원 포함`:""}`;
         interimOutstanding=0;
       }
       const elapsedMonths=baseDate&&payment.dueDate?Math.max(0,Math.floor(monthsBetween(baseDate,payment.dueDate)+1e-6)):0;
@@ -354,11 +385,11 @@
       const shortage=Math.max(0,-cashAfter);
       if(shortage&&!firstShortage)firstShortage={label:payment.label,dueText:payment.dueText,shortage};
       worstShortage=Math.max(worstShortage,shortage);
-      return {...payment,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note};
+      return {...payment,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note,interest,closingExtras};
     });
-    return {price,extras,totalCost:price+extras,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,mortgageLtv,mortgageTarget,peakInterim,totalOwn:rows.reduce((total,row)=>total+row.own,0),worstShortage,firstShortage,rows,rateTotal:source.reduce((total,row)=>total+row.rate,0)};
+    const totalOwn=rows.reduce((total,row)=>total+row.own,0);
+    return {price,extras,totalCost:price+extras+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance")||null};
   }
-
   function normalizeDate(value){
     const raw=String(value||"").trim();
     if(!raw)return "";
@@ -567,7 +598,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,parseSupplyRows,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);
