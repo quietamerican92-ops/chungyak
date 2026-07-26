@@ -38,6 +38,12 @@
       {size:"59B",min:1167500000,max:1242000000,options:[1167500000,1173700000,1194800000,1217200000,1235800000,1242000000]},
       {size:"84A",min:1499100000,max:1499100000,options:[1499100000]}
     ],
+    options:[
+      {id:"opt-wolgye-36-balcony",size:"36",category:"balcony",name:"발코니 확장",price:8000000,paymentAmounts:[800000,800000,6400000]},
+      {id:"opt-wolgye-59a-balcony",size:"59A",category:"balcony",name:"발코니 확장",price:17000000,paymentAmounts:[1700000,1700000,13600000]},
+      {id:"opt-wolgye-59b-balcony",size:"59B",category:"balcony",name:"발코니 확장",price:17000000,paymentAmounts:[1700000,1700000,13600000]},
+      {id:"opt-wolgye-84a-balcony",size:"84A",category:"balcony",name:"발코니 확장",price:22000000,paymentAmounts:[2200000,2200000,17600000]}
+    ],
     payments:[
       {kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},
       {kind:"interim",label:"중도금 1차",rate:10,dueDate:"2027-01-30",dueLabel:""},
@@ -80,6 +86,7 @@
       target.payments=String(target.projectName||"").includes("월계 중흥")?clone(DEFAULT_NOTICE.payments):[];
     }
     target.pricing=target.pricing.map(row=>({...row,options:Array.isArray(row.options)?row.options.map(value=>num(value)).filter(Boolean):[],details:Array.isArray(row.details)?row.details.map(detail=>({price:num(detail.price),paymentAmounts:Array.isArray(detail.paymentAmounts)?detail.paymentAmounts.map(value=>num(value)).filter(Boolean):[]})).filter(detail=>detail.price):[]}));
+    target.options=Array.isArray(target.options)?target.options.map((row,index)=>({id:String(row.id||`option-${index}`),size:String(row.size||""),category:String(row.category||"paid"),name:String(row.name||"유상옵션"),price:num(row.price),paymentAmounts:Array.isArray(row.paymentAmounts)?row.paymentAmounts.map(value=>num(value)).filter(Boolean):[]})).filter(row=>row.size&&row.price):String(target.projectName||"").includes("월계 중흥")?clone(DEFAULT_NOTICE.options):[];
     target.payments=target.payments.map((row,index)=>({...row,slot:Number.isInteger(Number(row.slot))?Number(row.slot):index}));
     target.paymentConfidence=num(target.paymentConfidence);
     return target;
@@ -295,7 +302,7 @@
     const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.min.mjs");
     pdfjs.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
-    const pages=Math.min(pdf.numPages,25),lines=[];
+    const pages=pdf.numPages,lines=[];
     for(let pageNo=1;pageNo<=pages;pageNo++){
       $("parseStatus").textContent=`PDF ${pageNo}/${pages}쪽에서 공급표·분양가·납부일정을 찾는 중…`;
       const page=await pdf.getPage(pageNo),viewport=page.getViewport({scale:1}),content=await page.getTextContent(),groups=[];
@@ -306,6 +313,7 @@
         if(!group){group={y,items:[]};groups.push(group)}
         group.items.push({x:transformed[4],width:item.width,text:item.str.trim()});
       });
+      lines.push(`__PAGE_${pageNo}__`);
       groups.sort((a,b)=>a.y-b.y).forEach(group=>{
         const line=joinPdfItems(group.items);
         if(line)lines.push(line);
@@ -337,6 +345,7 @@
     const adjusted=/청약과열지역/.test(text);
     const rates=isPrivate?{small:40,medium:70,large:overheated?80:adjusted?50:0}:{small:0,medium:0,large:0};
     const paymentData=R.parsePaymentData(lines,merged);
+    const options=R.parseOptionData(lines,merged);
     const wolgye=projectName.includes("월계 중흥");
     const pricing=paymentData.pricing.length?paymentData.pricing:wolgye?clone(DEFAULT_NOTICE.pricing):merged.map(row=>({size:row.name,min:0,max:0,options:[]}));
     const payments=paymentData.payments.length?paymentData.payments:wolgye?clone(DEFAULT_NOTICE.payments):[];
@@ -348,7 +357,7 @@
       priorityRegion,priorityYears:yearMatch?num(yearMatch[1]):0,specialMonths:/6개월\s*(?:이상|경과)/.test(text)?6:6,
       generalMonths:/24개월\s*(?:이상|경과)/.test(text)?24:12,generalHeadRequired:overheated||adjusted?"yes":"no",pointRates:rates,verified:false,
       sourceFile:fileName,parseConfidence:sizes.length?Math.min(95,55+sizes.length*10):20,sizes:merged,
-      pricing,payments,paymentConfidence:paymentData.confidence,expectedContractDate:wolgye?DEFAULT_NOTICE.expectedContractDate:"",expectedMoveInDate,expectedMoveInLabel:moveInMatch?`${moveInMatch[1]}년 ${String(moveInMatch[2]).padStart(2,"0")}월 예정`:wolgye?DEFAULT_NOTICE.expectedMoveInLabel:""
+      pricing,payments,options,paymentConfidence:paymentData.confidence,expectedContractDate:wolgye?DEFAULT_NOTICE.expectedContractDate:"",expectedMoveInDate,expectedMoveInLabel:moveInMatch?`${moveInMatch[1]}년 ${String(moveInMatch[2]).padStart(2,"0")}월 예정`:wolgye?DEFAULT_NOTICE.expectedMoveInLabel:""
     };
   }
 
@@ -509,9 +518,25 @@
     setupMoneyInputs($("finance"));
   }
   function saveFundingInputs(){
-    const data={};
+    const prior=readStorage(FINANCE_KEY,{}),data={selectedOptions:Array.from(document.querySelectorAll("[data-option-id]:checked")).map(input=>input.dataset.optionId)};
     FINANCE_IDS.forEach(id=>data[id]=FINANCE_CHECK_IDS.has(id)?Boolean($(id)?.checked):$(id)?.value??"");
+    if(!document.querySelector("[data-option-id]"))data.selectedOptions=Array.isArray(prior.selectedOptions)?prior.selectedOptions:[];
     localStorage.setItem(FINANCE_KEY,JSON.stringify(data));
+  }
+  function selectedOptionIds(){return new Set(Array.from(document.querySelectorAll("[data-option-id]:checked")).map(input=>input.dataset.optionId))}
+  function renderOptionChoices(){
+    normalizeNoticeFinance(notice);
+    const selectedSize=$("planSize").value,rows=notice.options.filter(row=>row.size===selectedSize),saved=new Set(readStorage(FINANCE_KEY,{}).selectedOptions||[]);
+    const categoryLabels={balcony:"발코니",system:"시스템에어컨",paid:"유상옵션"};
+    $("optionChoices").innerHTML=rows.length?rows.map(row=>{
+      const paymentText=row.paymentAmounts.length>1?row.paymentAmounts.map(value=>`${Math.round(value/row.price*100)}%`).join(" · "):"납부일정 확인";
+      return `<label class="option-choice"><input type="checkbox" data-option-id="${esc(row.id)}"${saved.has(row.id)?" checked":""}><span><b>${esc(row.name)}</b><small>${esc(categoryLabels[row.category]||"선택품목")} · ${esc(paymentText)}</small></span><strong>${formatWon(row.price)}</strong></label>`;
+    }).join(""):`<div class="option-empty">${selectedSize?`${esc(selectedSize)}형의 발코니·유상옵션 가격을 찾지 못했습니다. 공고문이 이미지 표이거나 별도 계약문서에 수록됐을 수 있습니다.`:"주택형을 먼저 선택해 주세요."}</div>`;
+    updateOptionSummary();
+  }
+  function updateOptionSummary(){
+    const ids=selectedOptionIds(),total=notice.options.filter(row=>ids.has(row.id)).reduce((sum,row)=>sum+num(row.price),0);
+    $("optionSummary").textContent=formatWon(total);
   }
   function queueFundingSave(){clearTimeout(financeSaveTimer);financeSaveTimer=setTimeout(saveFundingInputs,200)}
   function renderFinanceControls(resetPrice=false){
@@ -525,7 +550,7 @@
     if(resetPrice||!num($("planPrice").value))$("planPrice").value=formatNumberInput(selected?.max);
     if(!$("contractDate").value&&notice.expectedContractDate)$("contractDate").value=notice.expectedContractDate;
     if(!$("moveInDate").value&&notice.expectedMoveInDate)$("moveInDate").value=notice.expectedMoveInDate;
-    setupDateInputs();setupMoneyInputs($("finance"));
+    setupDateInputs();setupMoneyInputs($("finance"));renderOptionChoices();
   }
   function fundingInput(){
     const now=new Date();
@@ -533,14 +558,28 @@
     const price=num($("planPrice").value),size=$("planSize").value;
     const pricing=notice.pricing.find(row=>row.size===size),sizeRow=notice.sizes.find(row=>row.name===size);
     const detail=pricing?.details?.find(row=>num(row.price)===price&&Array.isArray(row.paymentAmounts));
-    const payments=(notice.payments||[]).map((payment,index)=>{
+    const basePayments=(notice.payments||[]).map((payment,index)=>{
       const slot=Number.isInteger(Number(payment.slot))?Number(payment.slot):index;
       const fixedAmount=detail?.paymentAmounts?.[slot];
       return fixedAmount===undefined?payment:{...payment,fixedAmount,rate:price?fixedAmount/price*100:num(payment.rate)};
     });
+    const selectedIds=selectedOptionIds(),selectedOptions=notice.options.filter(row=>row.size===size&&selectedIds.has(row.id));
+    const contractDate=R.normalizeDate($("contractDate").value),moveInDate=R.normalizeDate($("moveInDate").value);
+    const interimDates=basePayments.filter(row=>row.kind==="interim").map(row=>R.normalizeDate(row.dueDate)).filter(Boolean);
+    const extraPayments=selectedOptions.flatMap(option=>{
+      const parsedParts=option.paymentAmounts.map(value=>num(value)).filter(Boolean);
+      const parts=parsedParts.length&&Math.abs(parsedParts.reduce((sum,value)=>sum+value,0)-num(option.price))<=Math.max(2000,num(option.price)*.001)?parsedParts:[num(option.price)];
+      return parts.map((fixedAmount,index)=>{
+        const last=index===parts.length-1;
+        const phaseKind=parts.length===1?"contract":index===0?"contract":last?"balance":"interim";
+        const dueDate=phaseKind==="contract"?contractDate:phaseKind==="balance"?moveInDate:interimDates[Math.min(index-1,Math.max(0,interimDates.length-1))]||"";
+        const dueLabel=phaseKind==="contract"?(parts.length===1?"공고문 납부일정 확인":"옵션 계약 시"):phaseKind==="balance"?"입주 지정일":"옵션 중도금 시점";
+        return {kind:"other",phaseKind,extra:true,optionId:option.id,label:parts.length>1?`${option.name} ${index+1}차`:option.name,rate:0,fixedAmount,dueDate,dueLabel};
+      });
+    });
     const tax=R.acquisitionCostEstimate(price,num(sizeRow?.area),{mode:$("taxMode").value,manualTotalRate:num($("taxManualRate").value)});
     const manualExtras=num($("planExtras").value),includedTax=$("includeAcquisitionTax").checked?tax.total:0;
-    return {baseDate:today,price,size,area:num(sizeRow?.area),manualExtras,tax,includedTax,extras:manualExtras+includedTax,cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate:R.normalizeDate($("contractDate").value),moveInDate:R.normalizeDate($("moveInDate").value),interimLoanRate:num($("interimLoanRate").value),interimInterestRate:num($("interimInterestRate").value),includeInterimInterest:$("includeInterimInterest").checked,mortgageLtv:num($("mortgageLtv").value),payments};
+    return {baseDate:today,price,size,area:num(sizeRow?.area),manualExtras,tax,includedTax,extras:manualExtras+includedTax,optionTotal:selectedOptions.reduce((sum,row)=>sum+num(row.price),0),selectedOptions,cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate,moveInDate,interimLoanRate:num($("interimLoanRate").value),interimInterestRate:num($("interimInterestRate").value),includeInterimInterest:$("includeInterimInterest").checked,mortgageLtv:num($("mortgageLtv").value),payments:[...basePayments,...extraPayments]};
   }
   function minimumMonthlySaving(input){
     const zero={...input,monthlySaving:0};
@@ -570,7 +609,7 @@
   function renderFundingPhases(plan){
     const definitions=[{kind:"contract",step:"01",copy:"당첨 직후 현금"},{kind:"interim",step:"02",copy:"공사기간 분할납부"},{kind:"balance",step:"03",copy:"대출 정산·세금"}];
     $("fundingPhases").innerHTML=definitions.map(definition=>{
-      const rows=plan.rows.filter(row=>row.kind===definition.kind);
+      const rows=plan.rows.filter(row=>(row.phaseKind||row.kind)===definition.kind);
       const own=sum(rows,"own"),loan=sum(rows,"financing"),source=own+loan;
       const ownWidth=source?Math.max(0,Math.min(100,own/source*100)):0;
       const dates=rows.map(row=>row.dueText).filter(Boolean);
@@ -582,17 +621,23 @@
     const maximum=Math.max(1,...plan.rows.map(row=>row.own+row.financing));
     $("fundingTimeline").innerHTML=`<div class="cashflow-list">${plan.rows.map((row,index)=>{
       const source=row.own+row.financing,loanWidth=source?row.financing/source*100:0,scale=source/maximum*100;
-      return `<article class="cashflow-row ${row.shortage?"cashflow-risk":""}"><div class="cashflow-sequence"><span>${String(index+1).padStart(2,"0")}</span><i></i></div><div class="cashflow-date"><b>${esc(row.dueText.replaceAll("-","."))}</b><small>${phaseLabel(row.kind)}</small></div><div class="cashflow-main"><div><h4>${esc(row.label)}</h4><span>${row.rate.toFixed(1)}% · ${esc(row.note)}</span></div><b>${formatWon(row.gross)}</b><div class="cashflow-scale" style="width:${Math.max(18,scale)}%"><i style="width:${loanWidth}%"></i></div><div class="cashflow-split"><span>내 현금 <b>${formatWonShort(row.own)}</b></span><span>대출 <b>${row.financing?formatWonShort(row.financing):"없음"}</b></span><span>누적저축 <b>${formatWonShort(row.accumulatedSaving)}</b></span></div></div><div class="cashflow-balance ${row.cashAfter<0?"negative":""}"><small>납부 후 가용현금</small><b>${formatWonShort(row.cashAfter)}</b>${row.shortage?`<em>${formatWonShort(row.shortage)} 부족</em>`:"<span>O</span>"}</div></article>`;
+      return `<article class="cashflow-row ${row.shortage?"cashflow-risk":""}"><div class="cashflow-sequence"><span>${String(index+1).padStart(2,"0")}</span><i></i></div><div class="cashflow-date"><b>${esc(row.dueText.replaceAll("-","."))}</b><small>${phaseLabel(row.phaseKind||row.kind)}</small></div><div class="cashflow-main"><div><h4>${esc(row.label)}</h4><span>${row.extra?"선택품목":`${row.rate.toFixed(1)}%`} · ${esc(row.note)}</span></div><b>${formatWon(row.gross)}</b><div class="cashflow-scale" style="width:${Math.max(18,scale)}%"><i style="width:${loanWidth}%"></i></div><div class="cashflow-split"><span>내 현금 <b>${formatWonShort(row.own)}</b></span><span>대출 <b>${row.financing?formatWonShort(row.financing):"없음"}</b></span><span>누적저축 <b>${formatWonShort(row.accumulatedSaving)}</b></span></div></div><div class="cashflow-balance ${row.cashAfter<0?"negative":""}"><small>납부 후 가용현금</small><b>${formatWonShort(row.cashAfter)}</b>${row.shortage?`<em>${formatWonShort(row.shortage)} 부족</em>`:"<span>O</span>"}</div></article>`;
     }).join("")}</div>`;
   }
   function renderFundingPlan(){
     const input=fundingInput();
     renderTaxPreview(input);
+    updateOptionSummary();
+    const cashExcess=Math.max(0,input.reserve-input.cashNow),usable=Math.max(0,input.cashNow-input.reserve);
+    $("cashReserve").setAttribute("aria-invalid",cashExcess?"true":"false");
+    $("usableCashPreview").className=`usable-cash-preview${cashExcess?" is-invalid":""}`;
+    $("usableCashPreview").textContent=cashExcess?`남겨둘 금액이 현재 현금보다 ${formatWon(cashExcess)} 큽니다. 청약에 투입 가능한 시작 현금은 0원입니다.`:`계약 전 투입 가능 현금 ${formatWon(usable)} = 현재 현금 ${formatWon(input.cashNow)} − 남겨둘 금액 ${formatWon(input.reserve)}`;
     if(!input.price||!Array.isArray(input.payments)||!input.payments.length){
       $("financeWarning").innerHTML="<div class='alert bad'>분양가 또는 납부일정이 없습니다. 모집공고 화면에서 자동 추출값을 확인하거나 직접 입력해 주세요.</div>";
       $("fundingHero").innerHTML="";$("fundingSummary").innerHTML="";$("fundingPhases").innerHTML="";$("fundingTimeline").innerHTML="";return;
     }
     const plan=R.buildFundingPlan(input),minimumSaving=minimumMonthlySaving(input),warnings=[];
+    if(input.reserve>input.cashNow)warnings.push({type:"bad",message:`남겨둘 금액 ${formatWonShort(input.reserve)}이 현재 가용현금 ${formatWonShort(input.cashNow)}보다 큽니다. 현재 입력대로면 청약에 쓸 시작 현금은 0원입니다.`});
     if(Math.abs(plan.rateTotal-100)>.01)warnings.push({type:"bad",message:`납부비율 합계가 ${plan.rateTotal.toFixed(1)}%입니다. 공고문 표와 다시 대조하세요.`});
     if(!input.contractDate)warnings.push({type:"warn",message:"예상 계약일을 넣으면 계약일까지 모을 수 있는 돈을 계산합니다."});
     if(!input.moveInDate)warnings.push({type:"warn",message:"예상 입주·잔금일을 넣으면 중도금 후불이자와 잔금 시점 저축액을 계산합니다."});
@@ -601,10 +646,10 @@
     if(plan.firstShortage)warnings.push({type:"bad",message:`${plan.firstShortage.dueText} ${plan.firstShortage.label}에서 ${formatWonShort(plan.firstShortage.shortage)}가 부족합니다.`});
     $("financeWarning").innerHTML=warnings.map(item=>`<div class="alert ${item.type}">${esc(item.message)}</div>`).join("");
     const coverage=plan.totalOwn?Math.max(0,Math.min(100,(plan.totalOwn-plan.worstShortage)/plan.totalOwn*100)):100;
-    const closingOwn=plan.closingRow?.own||0;
+    const closingOwn=plan.rows.filter(row=>(row.phaseKind||row.kind)==="balance").reduce((sum,row)=>sum+row.own,0);
     const savingText=minimumSaving===null?"계약 전 현금 보강 필요":minimumSaving?`${formatWonShort(minimumSaving)}/월`:"추가저축 없이 충족";
-    $("fundingHero").innerHTML=`<article class="funding-hero ${plan.worstShortage?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">MY FUNDING READINESS</span><h3>${plan.worstShortage?`자금이 ${formatWonShort(plan.worstShortage)} 부족합니다`:"현재 가정으로 모든 납부일을 통과합니다"}</h3><p>${plan.firstShortage?`첫 부족 시점은 ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}입니다.`:`비상예비자금 ${formatWonShort(plan.reserve)}을 남기고 계산한 결과입니다.`}</p><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>자기자금 충족도 ${coverage.toFixed(0)}%</small></div><div class="funding-hero-metrics"><div><span>잔금일 내 현금</span><b>${formatWonShort(closingOwn)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>잔금 포함 세금</span><b>${formatWonShort(input.includedTax)}</b></div></div></article>`;
-    $("fundingSummary").innerHTML=`<div><span>총 취득예산</span><b>${formatWonShort(plan.totalCost)}</b><small>분양가·옵션·세금·이자</small></div><div><span>취득부대세</span><b>${formatWonShort(input.tax.total)}</b><small>실효세율 ${input.tax.totalRate.toFixed(2)}%</small></div><div><span>예상 중도금 이자</span><b>${formatWonShort(plan.deferredInterest)}</b><small>연 ${plan.interimInterestRate.toFixed(1)}% 단리</small></div><div><span>최대 중도금대출</span><b>${formatWonShort(plan.peakInterim)}</b><small>입주 때 상환·전환 가정</small></div><div><span>예상 주담대 한도</span><b>${formatWonShort(plan.mortgageTarget)}</b><small>LTV ${plan.mortgageLtv.toFixed(0)}% 입력값</small></div><div><span>총 자기자금 투입</span><b>${formatWonShort(plan.totalOwn)}</b><small>대출을 제외한 실제 현금</small></div>`;
+    $("fundingHero").innerHTML=`<article class="funding-hero ${plan.worstShortage?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">MY FUNDING READINESS</span><h3>${plan.worstShortage?`자금이 ${formatWonShort(plan.worstShortage)} 부족합니다`:"현재 가정으로 모든 납부일을 통과합니다"}</h3><p>${plan.firstShortage?`첫 부족 시점은 ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}입니다.`:`현재 현금에서 ${formatWonShort(plan.reserve)}을 따로 남기고 계산한 결과입니다.`}</p><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>자기자금 충족도 ${coverage.toFixed(0)}%</small></div><div class="funding-hero-metrics"><div><span>잔금일 내 현금</span><b>${formatWonShort(closingOwn)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>잔금 포함 세금</span><b>${formatWonShort(input.includedTax)}</b></div></div></article>`;
+    $("fundingSummary").innerHTML=`<div><span>총 취득예산</span><b>${formatWonShort(plan.totalCost)}</b><small>분양가·옵션·세금·이자</small></div><div><span>선택한 발코니·옵션</span><b>${formatWonShort(input.optionTotal)}</b><small>${input.selectedOptions.length}개 선택 · 납부회차 반영</small></div><div><span>취득부대세</span><b>${formatWonShort(input.tax.total)}</b><small>실효세율 ${input.tax.totalRate.toFixed(2)}%</small></div><div><span>예상 중도금 이자</span><b>${formatWonShort(plan.deferredInterest)}</b><small>연 ${plan.interimInterestRate.toFixed(1)}% 단리</small></div><div><span>최대 중도금대출</span><b>${formatWonShort(plan.peakInterim)}</b><small>입주 때 상환·전환 가정</small></div><div><span>예상 주담대 한도</span><b>${formatWonShort(plan.mortgageTarget)}</b><small>LTV ${plan.mortgageLtv.toFixed(0)}% 입력값</small></div><div><span>총 자기자금 투입</span><b>${formatWonShort(plan.totalOwn)}</b><small>대출을 제외한 실제 현금</small></div>`;
     renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   function calculate(){
@@ -669,7 +714,7 @@
     saveCurrentNotice(false);notice=clone(notices[event.target.value]);activeId=notice.id;localStorage.setItem(ACTIVE_KEY,activeId);$("planPrice").value="";renderNotice();renderFundingPlan();toast("저장된 공고를 불러왔습니다.");
   });
   $("blankNotice").addEventListener("click",()=>{
-    notice={...clone(DEFAULT_NOTICE),id:"notice-"+Date.now(),projectName:"",noticeDate:"",location:"",priorityRegion:"",priorityYears:0,verified:false,sourceFile:"",parseConfidence:0,sizes:[],pricing:[],payments:[],paymentConfidence:0,expectedContractDate:"",expectedMoveInDate:"",expectedMoveInLabel:""};
+    notice={...clone(DEFAULT_NOTICE),id:"notice-"+Date.now(),projectName:"",noticeDate:"",location:"",priorityRegion:"",priorityYears:0,verified:false,sourceFile:"",parseConfidence:0,sizes:[],pricing:[],payments:[],options:[],paymentConfidence:0,expectedContractDate:"",expectedMoveInDate:"",expectedMoveInLabel:""};
     $("planPrice").value="";renderNotice();renderFundingPlan();toast("빈 공고를 만들었습니다.");
   });
   $("pdfFile").addEventListener("change",async event=>{
@@ -678,7 +723,7 @@
       const extracted=await extractPdf(file);
       notice=parseAnnouncement(extracted.lines,file.name);$("planPrice").value="";
       renderNotice();
-      $("parseStatus").textContent=`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`;
+      $("parseStatus").textContent=`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`;
       toast("PDF 분석 초안을 만들었습니다.");
     }catch(error){
       console.error(error);
@@ -701,7 +746,8 @@
     notice.verified=true;saveCurrentNotice(false);renderNotice();calculate();setPanel("strategy");toast("검수된 물량으로 전략을 계산했습니다.");
   });
   $("calculate").addEventListener("click",calculate);
-  $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});
+$("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});
+  $("optionChoices").addEventListener("change",event=>{if(!event.target.matches("[data-option-id]"))return;updateOptionSummary();saveFundingInputs();renderFundingPlan()});
   FINANCE_IDS.filter(id=>id!=="planSize").forEach(id=>$(id)?.addEventListener("input",()=>{queueFundingSave();renderFundingPlan()}));
   $("calculateFunding").addEventListener("click",renderFundingPlan);
 

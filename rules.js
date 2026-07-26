@@ -338,6 +338,114 @@
     const confidence=Math.min(100,(complete?55:pricing.length?35:0)+(payments.length?25:0)+(exactPayments===allDetails.length?20:exactPayments?10:0));
     return {pricing,payments,confidence};
   }
+  function optionMoneyValues(line){
+    return [...String(line||"").matchAll(/\d{1,3}(?:,\d{3})+/g)]
+      .map(match=>({value:Number(match[0].replace(/,/g,"")),index:match.index,end:(match.index||0)+match[0].length}))
+      .filter(item=>item.value>=100000&&item.value<=1000000000);
+  }
+
+  function optionCategory(line){
+    const value=String(line||"").replace(/\s+/g," ");
+    if(/발코니\s*확장/.test(value)&&(/공사비|금액|대금|계약|품목|비용|납부|선택/.test(value)||value.length<50))return "balcony";
+    if(/시스템\s*에어컨|천장형\s*에어컨/.test(value)&&(/공급금액|가격|대금|계약|품목|옵션|납부|선택/.test(value)||value.length<55))return "system";
+    if(/추가\s*선택품목|유상\s*(?:옵션|선택품목)|플러스\s*옵션|가전\s*옵션|마감재\s*옵션/.test(value))return "paid";
+    return "";
+  }
+
+  function optionTotal(line){
+    const values=optionMoneyValues(line);
+    for(let index=0;index<values.length;index++){
+      for(let count=4;count>=2;count--){
+        if(index+count>=values.length)continue;
+        const total=values[index].value;
+        const parts=values.slice(index+1,index+1+count).map(item=>item.value);
+        if(Math.abs(parts.reduce((sum,value)=>sum+value,0)-total)<=Math.max(2000,total*.001))return {total,parts,index:values[index].index,end:values[index+count].end};
+      }
+    }
+    if(values.length===1)return {total:values[0].value,parts:[],index:values[0].index,end:values[0].end};
+    return null;
+  }
+
+  function optionSizeNames(text,sizes){
+    const value=String(text||"").toUpperCase(),found=[];
+    const add=name=>{if(name&&!found.includes(name))found.push(name)};
+    sizes.forEach(size=>{
+      const escaped=size.name.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+      if(new RegExp(`(?:^|[^0-9A-Z])${escaped}(?![0-9A-Z])`).test(value))add(size.name);
+    });
+    for(const match of value.matchAll(/(?:^|[^0-9A-Z])(\d{2,3})([A-Z])(?:\s*[/,]\s*([A-Z]))+(?![0-9A-Z])/g)){
+      const base=match[1];
+      [match[2],...match[0].match(/[A-Z]/g).slice(1)].forEach(suffix=>add(canonicalSize(base+suffix,sizes)));
+    }
+    for(const match of value.matchAll(/\b0?(\d{2,3})\.\d{2,4}([A-Z])?\b/g))add(canonicalSize(String(Number(match[1]))+(match[2]||""),sizes));
+    return found;
+  }
+
+  function optionName(prefix,category){
+    let value=String(prefix||"")
+      .replace(/\b0?\d{2,3}\.\d{2,4}[A-Z]?\b/g," ")
+      .replace(/\b\d{2,3}[A-Z]?(?:\s*[/,]\s*[A-Z])?\b/g," ")
+      .replace(/\b(?:VAT|부가세|단위|원|타입|주택형|선택)\b/gi," ")
+      .replace(/[■□※()\[\]]/g," ").replace(/\s+/g," ").trim();
+    if(category==="balcony")return "발코니 확장";
+    if(!value)value=category==="system"?"시스템에어컨":"유상옵션";
+    if(category==="system"&&!/에어컨/.test(value))value=`시스템에어컨 · ${value}`;
+    return value.slice(0,80);
+  }
+
+  function optionId(size,category,name,price){
+    const value=`${size}|${category}|${name}|${price}`;
+    let hash=2166136261;
+    for(let index=0;index<value.length;index++){hash^=value.charCodeAt(index);hash=Math.imul(hash,16777619)}
+    return `opt-${(hash>>>0).toString(36)}`;
+  }
+
+  function parseOptionData(lines,sizeNames=[]){
+    const sizes=[];
+    (sizeNames||[]).forEach(item=>{
+      const name=typeof item==="object"?String(item.name||item.size||""):String(item);
+      if(name&&!sizes.some(row=>row.name===name))sizes.push({name});
+    });
+    if(!sizes.length)return [];
+    const clean=(lines||[]).map(line=>normalizeSplitDecimals(line).replace(/[–—]/g,"-").replace(/\s+/g," ").trim());
+    const entries=[],dedupe=new Set();
+    let category="",headerLine=-999,currentSizes=[],matrixSizes=[];
+    const reject=/가구당|평균소득|소득기준|예금주|계좌번호|금융기관|은행|주택도시보증공사|인지세|연체료|보증료/;
+    const add=(targets,kind,name,total,parts,sourceLine)=>{
+      targets.forEach(size=>{
+        const key=`${size}|${kind}|${name}|${total}`;
+        if(!total||dedupe.has(key))return;
+        dedupe.add(key);entries.push({id:optionId(size,kind,name,total),size,category:kind,name,price:total,paymentAmounts:parts||[],sourceLine});
+      });
+    };
+    clean.forEach((line,lineIndex)=>{
+      if(!line)return;
+      if(/^__PAGE_\d+__$/.test(line)){category="";headerLine=-999;currentSizes=[];matrixSizes=[];return}
+      const foundCategory=optionCategory(line);
+      if(foundCategory){category=foundCategory;headerLine=lineIndex;currentSizes=[];matrixSizes=[]}
+      if(!category||lineIndex-headerLine>220||reject.test(line))return;
+      const mentioned=optionSizeNames(line,sizes);
+      const money=optionMoneyValues(line);
+      if(mentioned.length&&money.length===0){currentSizes=mentioned;matrixSizes=mentioned.length>1?mentioned:matrixSizes;return}
+      if(mentioned.length)currentSizes=mentioned;
+      if(!money.length)return;
+      const total=optionTotal(line);
+      const prefix=line.slice(0,total?.index??money[0].index);
+      const itemCategory=/발코니\s*확장/.test(line)?"balcony":category;
+      const name=optionName(prefix,itemCategory);
+      if(total){
+        const maximum=itemCategory==="system"?50000000:itemCategory==="balcony"?150000000:200000000;
+        if(total.total>maximum||/감리|감정평가|공사비용 총액|계약금\s*\d*%|잔금\s*\d*%/.test(name))return;
+        const targets=mentioned.length?mentioned:currentSizes;
+        if(targets.length)add(targets,itemCategory,name,total.total,total.parts,line);
+        return;
+      }
+      if(matrixSizes.length&&money.length===matrixSizes.length){
+        matrixSizes.forEach((size,index)=>{const maximum=category==="system"?50000000:category==="balcony"?150000000:200000000;if(money[index].value<=maximum)add([size],category,name,money[index].value,[],line)});
+      }
+    });
+    return entries.sort((a,b)=>a.size.localeCompare(b.size,"ko",{numeric:true})||a.category.localeCompare(b.category)||a.price-b.price||a.name.localeCompare(b.name,"ko"));
+  }
   function buildFundingPlan(input){
     const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
     const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
@@ -346,16 +454,18 @@
     const mortgageTarget=Math.round(price*mortgageLtv/100);
     const source=(input.payments||[]).map((payment,index)=>({...payment,index,rate:Number(payment.rate)||0}));
     const resolved=source.map(payment=>{
-      const dueDate=normalizeDate(payment.dueDate)||(payment.kind==="contract"?contractDate:payment.kind==="balance"?moveInDate:"");
-      return {...payment,dueDate,dueText:dueDate||payment.dueLabel||"날짜 확인"};
-    }).sort((a,b)=>a.dueDate&&b.dueDate?a.dueDate.localeCompare(b.dueDate):a.dueDate?-1:b.dueDate?1:a.index-b.index);
-    const balanceDate=moveInDate||resolved.find(payment=>payment.kind==="balance"&&payment.dueDate)?.dueDate||"";
+      const phase=payment.phaseKind||payment.kind;
+      const dueDate=normalizeDate(payment.dueDate)||(phase==="contract"?contractDate:phase==="balance"?moveInDate:"");
+      return {...payment,phaseKind:phase,dueDate,dueText:dueDate||payment.dueLabel||"날짜 확인"};
+    }).sort((a,b)=>a.dueDate&&b.dueDate?a.dueDate.localeCompare(b.dueDate)||a.index-b.index:a.dueDate?-1:b.dueDate?1:a.index-b.index);
+    const balanceDate=moveInDate||resolved.find(payment=>payment.phaseKind==="balance"&&payment.dueDate)?.dueDate||"";
     let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0,deferredInterest=0,interestIncomplete=false;
     const usableStart=Math.max(0,cashNow-reserve);
     const rows=resolved.map(payment=>{
       const scheduled=payment.fixedAmount!==undefined&&payment.fixedAmount!==null?won(payment.fixedAmount):Math.round(price*payment.rate/100);
-      let gross=scheduled,financing=0,own=scheduled,note="자기자금 납부",interest=0,closingExtras=0;
-      if(payment.kind==="interim"){
+      const phase=payment.phaseKind||payment.kind;
+      let gross=scheduled,financing=0,own=scheduled,note=payment.extra?"공고문 선택품목 · 자기자금 납부":"자기자금 납부",interest=0,closingExtras=0;
+      if(payment.kind==="interim"&&!payment.extra){
         financing=Math.round(scheduled*interimLoanRate/100);
         own=scheduled-financing;
         interimOutstanding+=financing;
@@ -367,14 +477,14 @@
             deferredInterest+=interest;
           }else interestIncomplete=true;
         }
-        note=`중도금 대출 ${interimLoanRate.toFixed(0)}%${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`;
-      }else if(payment.kind==="balance"){
+        note=`중도금의 ${interimLoanRate.toFixed(0)}%를 대출${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`;
+      }else if(payment.kind==="balance"&&!payment.extra){
         const closingNeed=scheduled+interimOutstanding;
         financing=Math.min(closingNeed,mortgageTarget);
         closingExtras=extras+deferredInterest;
         own=Math.max(0,closingNeed-financing)+closingExtras;
         gross=scheduled+closingExtras;
-        note=`주담대에서 중도금대출 ${interimOutstanding.toLocaleString("ko-KR")}원 상환${closingExtras?` · 세금·부대비용 ${closingExtras.toLocaleString("ko-KR")}원 포함`:""}`;
+        note=`주담대로 중도금대출 ${interimOutstanding.toLocaleString("ko-KR")}원 상환${closingExtras?` · 세금·기타비용 ${closingExtras.toLocaleString("ko-KR")}원 포함`:""}`;
         interimOutstanding=0;
       }
       const elapsedMonths=baseDate&&payment.dueDate?Math.max(0,Math.floor(monthsBetween(baseDate,payment.dueDate)+1e-6)):0;
@@ -385,10 +495,11 @@
       const shortage=Math.max(0,-cashAfter);
       if(shortage&&!firstShortage)firstShortage={label:payment.label,dueText:payment.dueText,shortage};
       worstShortage=Math.max(worstShortage,shortage);
-      return {...payment,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note,interest,closingExtras};
+      return {...payment,phaseKind:phase,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note,interest,closingExtras};
     });
     const totalOwn=rows.reduce((total,row)=>total+row.own,0);
-    return {price,extras,totalCost:price+extras+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance")||null};
+    const optionTotal=source.filter(row=>row.extra).reduce((total,row)=>total+won(row.fixedAmount),0);
+    return {price,extras,optionTotal,totalCost:price+extras+optionTotal+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.filter(row=>!row.extra).reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance"&&!row.extra)||null};
   }
   function normalizeDate(value){
     const raw=String(value||"").trim();
@@ -598,7 +709,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseOptionData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

@@ -156,4 +156,26 @@ assert.strictEqual(taxFirst.total,4400000);
 const interestPlan=R.buildFundingPlan({price:1000000000,cashNow:1000000000,moveInDate:"2028-01-01",interimLoanRate:100,interimInterestRate:5,includeInterimInterest:true,payments:[{kind:"interim",label:"중도금",rate:10,dueDate:"2027-01-01"},{kind:"balance",label:"잔금",rate:30,dueDate:"2028-01-01"}]});
 assert.strictEqual(interestPlan.deferredInterest,5000000);
 assert.strictEqual(interestPlan.closingRow.own,405000000);
+const optionFixture=[
+  "__PAGE_41__",
+  "발코니 확장공사비 공급금액 계약금 중도금 잔금",
+  "36 8,000,000 800,000 800,000 6,400,000",
+  "59A/B 17,000,000 1,700,000 1,700,000 13,600,000",
+  "__PAGE_42__",
+  "가구당 월평균소득 579,278 702,038",
+  "__PAGE_43__",
+  "추가 선택품목(유상옵션) 공급금액 계약금 중도금 잔금",
+  "36 붙박이장 1,100,000 110,000 110,000 880,000"
+];
+const parsedOptions=R.parseOptionData(optionFixture,["36","59A","59B"]);
+assert.deepStrictEqual(parsedOptions.filter(row=>row.category==="balcony").map(row=>[row.size,row.price]),[["36",8000000],["59A",17000000],["59B",17000000]]);
+assert.strictEqual(parsedOptions.find(row=>row.category==="paid").price,1100000);
+assert.ok(parsedOptions.every(row=>!String(row.price).includes("579278")));
+const fundingWithOption=R.buildFundingPlan({price:1000000000,extras:0,cashNow:1100000000,contractDate:"2026-08-01",moveInDate:"2029-01-01",payments:[{kind:"contract",label:"계약금",rate:10},{kind:"balance",label:"잔금",rate:90},{kind:"other",phaseKind:"contract",extra:true,label:"발코니 확장",rate:0,fixedAmount:8000000}]});
+assert.strictEqual(fundingWithOption.optionTotal,8000000);
+assert.strictEqual(fundingWithOption.totalCost,1008000000);
+assert.strictEqual(fundingWithOption.rateTotal,100);
+const overReserved=R.buildFundingPlan({price:100000000,cashNow:300000000,reserve:600000000,payments:[{kind:"contract",label:"계약금",rate:10}]});
+assert.strictEqual(overReserved.usableStart,0);
+assert.strictEqual(overReserved.firstShortage.shortage,10000000);
 console.log("rules.test.js: allocation, scoring, income, profile, payment parsing and funding checks passed");
