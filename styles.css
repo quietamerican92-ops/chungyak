@@ -157,3 +157,14 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .option-choice>strong{font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 .option-empty{grid-column:1/-1;padding:13px;border:1px dashed #cbd4cc;border-radius:11px;color:var(--muted);font-size:11px;line-height:1.55;text-align:center;background:white}
 @media(max-width:760px){.option-section-head{align-items:flex-start}.option-choices{grid-template-columns:1fr}.option-section-head>strong{font-size:18px}}
+
+/* Funding plan 3.1: installment-level interim financing */
+.interim-choice-wrap{grid-column:1/-1;border:1px solid #ccd8e8;border-radius:13px;background:#fff;padding:12px}
+.interim-choice-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}.interim-choice-title b{font-size:12px;color:var(--ink)}.interim-choice-title small{font-size:9px;color:var(--muted)}
+.interim-funding-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.interim-source-note{grid-column:1/-1;padding:8px 10px;border-radius:9px;background:#eaf1fb;color:#214a84;font-size:10px;font-weight:850;line-height:1.45}
+.interim-funding-row{display:grid!important;grid-template-columns:minmax(0,1fr) 104px;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fbfcfb}
+.interim-funding-row>span{display:flex;flex-direction:column;gap:3px;min-width:0}.interim-funding-row b{font-size:11px;color:var(--ink)}.interim-funding-row small{font-size:9px;color:var(--muted);font-weight:700;white-space:normal}
+.interim-funding-row select{margin:0;min-height:34px!important;padding:6px 8px;font-size:10px;font-weight:900}
+.interim-funding-row:has(select option[value="loan"]:checked){border-color:#b9c9e4;background:#f4f7fc}.interim-funding-row:has(select option[value="self"]:checked){border-color:#d9cfc0;background:#fffaf3}
+@media(max-width:760px){.interim-funding-choices{grid-template-columns:1fr}.interim-choice-title{align-items:flex-start;flex-direction:column}}

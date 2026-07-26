@@ -338,6 +338,24 @@
     const confidence=Math.min(100,(complete?55:pricing.length?35:0)+(payments.length?25:0)+(exactPayments===allDetails.length?20:exactPayments?10:0));
     return {pricing,payments,confidence};
   }
+  function parseInterimLoanPlan(text,payments=[]){
+    const interim=payments.filter(row=>row.kind==="interim"),count=interim.length;
+    if(!count)return {modes:[],source:"중도금 회차 없음"};
+    const compact=String(text||"").replace(/\s+/g," ");
+    const explicit=compact.match(/1\s*[~∼\-]\s*(\d+)\s*회차\s*(?:까지\s*)?(?:중도금\s*)?대출[\s\S]{0,100}?(\d+)\s*[~∼\-]\s*(\d+)\s*회차\s*중도금[\s\S]{0,50}?(?:직접\s*납부|자납)/);
+    if(explicit){
+      const loanThrough=Math.min(count,integer(explicit[1]));
+      return {modes:interim.map((_,index)=>index<loanThrough?"loan":"self"),source:`공고문 1~${loanThrough}회차 대출·${loanThrough+1}~${count}회차 자납`};
+    }
+    const matches=[...compact.matchAll(/중도금\s*(?:대출|융자)[\s\S]{0,100}?(?:전체\s*)?(?:분양|공급)(?:대금|가격|금액)?(?:의)?\s*(\d+)\s*%\s*범위|(?:전체\s*)?(?:분양|공급)(?:대금|가격|금액)?(?:의)?\s*(\d+)\s*%\s*범위[\s\S]{0,80}?중도금\s*(?:대출|융자)/g)];
+    const limit=matches.map(match=>integer(match[1]||match[2])).find(value=>value>0&&value<=100)||0;
+    if(limit){
+      let accumulated=0;
+      const modes=interim.map(row=>{if(accumulated+(Number(row.rate)||0)<=limit+.01){accumulated+=Number(row.rate)||0;return "loan"}return "self"});
+      return {modes,source:`공고문 대출 알선 ${limit}% 범위 · 회차는 확인 필요`};
+    }
+    return {modes:interim.map(()=>"review"),source:"대출 알선 회차를 공고문에서 확정하지 못함"};
+  }
   function optionMoneyValues(line){
     return [...String(line||"").matchAll(/\d{1,3}(?:,\d{3})+/g)]
       .map(match=>({value:Number(match[0].replace(/,/g,"")),index:match.index,end:(match.index||0)+match[0].length}))
@@ -449,7 +467,7 @@
   function buildFundingPlan(input){
     const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
     const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
-    const interimLoanRate=clamp(Number(input.interimLoanRate)||0,0,100),mortgageLtv=clamp(Number(input.mortgageLtv)||0,0,100);
+    const legacyInterimLoanEnabled=clamp(Number(input.interimLoanRate)||0,0,100)>0,mortgageLtv=clamp(Number(input.mortgageLtv)||0,0,100);
     const interimInterestRate=clamp(Number(input.interimInterestRate)||0,0,30),includeInterimInterest=Boolean(input.includeInterimInterest)&&interimInterestRate>0;
     const mortgageTarget=Math.round(price*mortgageLtv/100);
     const source=(input.payments||[]).map((payment,index)=>({...payment,index,rate:Number(payment.rate)||0}));
@@ -466,7 +484,8 @@
       const phase=payment.phaseKind||payment.kind;
       let gross=scheduled,financing=0,own=scheduled,note=payment.extra?"공고문 선택품목 · 자기자금 납부":"자기자금 납부",interest=0,closingExtras=0;
       if(payment.kind==="interim"&&!payment.extra){
-        financing=Math.round(scheduled*interimLoanRate/100);
+        const loanEnabled=payment.loanEnabled!==undefined?Boolean(payment.loanEnabled):legacyInterimLoanEnabled;
+        financing=loanEnabled?scheduled:0;
         own=scheduled-financing;
         interimOutstanding+=financing;
         peakInterim=Math.max(peakInterim,interimOutstanding);
@@ -477,7 +496,7 @@
             deferredInterest+=interest;
           }else interestIncomplete=true;
         }
-        note=`중도금의 ${interimLoanRate.toFixed(0)}%를 대출${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`;
+        note=loanEnabled?`해당 회차 전액 대출 실행${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`:"해당 회차 전액 자납";
       }else if(payment.kind==="balance"&&!payment.extra){
         const closingNeed=scheduled+interimOutstanding;
         financing=Math.min(closingNeed,mortgageTarget);
@@ -499,7 +518,7 @@
     });
     const totalOwn=rows.reduce((total,row)=>total+row.own,0);
     const optionTotal=source.filter(row=>row.extra).reduce((total,row)=>total+won(row.fixedAmount),0);
-    return {price,extras,optionTotal,totalCost:price+extras+optionTotal+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimLoanRate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.filter(row=>!row.extra).reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance"&&!row.extra)||null};
+    return {price,extras,optionTotal,totalCost:price+extras+optionTotal+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.filter(row=>!row.extra).reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance"&&!row.extra)||null};
   }
   function normalizeDate(value){
     const raw=String(value||"").trim();
@@ -709,7 +728,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseOptionData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

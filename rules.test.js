@@ -120,13 +120,13 @@ assert.deepStrictEqual(parsedPdfJsSpacing.pricing.map(row=>({size:row.size,min:r
   {size:"59B",min:1167500000,max:1242000000},
   {size:"84A",min:1499100000,max:1499100000}
 ]);
-const billionSchedule=[{kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},...Array.from({length:6},(_,index)=>({kind:"interim",label:`중도금 ${index+1}차`,rate:10,dueDate:`2027-0${index+1}-01`,dueLabel:""})),{kind:"balance",label:"잔금",rate:30,dueDate:"",dueLabel:"입주 지정일"}];
-const funding=R.buildFundingPlan({baseDate:"2026-01-01",price:1000000000,extras:0,cashNow:200000000,reserve:50000000,monthlySaving:0,contractDate:"2026-08-01",moveInDate:"2029-05-01",interimLoanRate:100,mortgageLtv:40,payments:billionSchedule});
+const billionSchedule=[{kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},...Array.from({length:6},(_,index)=>({kind:"interim",label:`중도금 ${index+1}차`,rate:10,dueDate:`2027-0${index+1}-01`,dueLabel:"",loanEnabled:index<4})),{kind:"balance",label:"잔금",rate:30,dueDate:"",dueLabel:"입주 지정일"}];
+const funding=R.buildFundingPlan({baseDate:"2026-01-01",price:1000000000,extras:0,cashNow:200000000,reserve:50000000,monthlySaving:0,contractDate:"2026-08-01",moveInDate:"2029-05-01",mortgageLtv:40,payments:billionSchedule});
 assert.strictEqual(funding.mortgageTarget,400000000);
-assert.strictEqual(funding.peakInterim,600000000);
+assert.strictEqual(funding.peakInterim,400000000);
 assert.strictEqual(funding.totalOwn,600000000);
 assert.strictEqual(funding.worstShortage,450000000);
-assert.strictEqual(funding.firstShortage.label,"잔금");
+assert.strictEqual(funding.firstShortage.label,"중도금 5차");
 
 const sixCategorySupply=R.parseSupplyRows([
   "기관추천 다자녀 신혼부부 노부모부양 생애최초 신생아 특별공급 계 일반공급 최하층",
@@ -153,9 +153,13 @@ assert.strictEqual(taxLarge.total,35000000);
 const taxFirst=R.acquisitionCostEstimate(600000000,84,{mode:"first_home"});
 assert.strictEqual(taxFirst.discount,2000000);
 assert.strictEqual(taxFirst.total,4400000);
-const interestPlan=R.buildFundingPlan({price:1000000000,cashNow:1000000000,moveInDate:"2028-01-01",interimLoanRate:100,interimInterestRate:5,includeInterimInterest:true,payments:[{kind:"interim",label:"중도금",rate:10,dueDate:"2027-01-01"},{kind:"balance",label:"잔금",rate:30,dueDate:"2028-01-01"}]});
+const interestPlan=R.buildFundingPlan({price:1000000000,cashNow:1000000000,moveInDate:"2028-01-01",interimInterestRate:5,includeInterimInterest:true,payments:[{kind:"interim",label:"중도금",rate:10,dueDate:"2027-01-01",loanEnabled:true},{kind:"balance",label:"잔금",rate:30,dueDate:"2028-01-01"}]});
 assert.strictEqual(interestPlan.deferredInterest,5000000);
 assert.strictEqual(interestPlan.closingRow.own,405000000);
+const wolgyeLoanPlan=R.parseInterimLoanPlan("본 아파트의 중도금 대출은 이자후불제이며, 전체 분양대금의 40% 범위 내에서 중도금 융자 알선을 시행할 예정이며, 1~4회차 대출을 받았을 경우 5~6회차 중도금(분양대금의 20%)은 계약자가 직접 납부해야 합니다.",billionSchedule);
+assert.deepStrictEqual(wolgyeLoanPlan.modes,["loan","loan","loan","loan","self","self"]);
+const genericLoanPlan=R.parseInterimLoanPlan("총 분양가격의 60% 범위 내에서 중도금 융자 알선을 시행할 예정입니다.",billionSchedule);
+assert.deepStrictEqual(genericLoanPlan.modes,["loan","loan","loan","loan","loan","loan"]);
 const optionFixture=[
   "__PAGE_41__",
   "발코니 확장공사비 공급금액 계약금 중도금 잔금",
