@@ -464,12 +464,91 @@
     });
     return entries.sort((a,b)=>a.size.localeCompare(b.size,"ko",{numeric:true})||a.category.localeCompare(b.category)||a.price-b.price||a.name.localeCompare(b.name,"ko"));
   }
-  function buildFundingPlan(input){
+  function annuityPrincipal(monthlyPayment,annualRate,months){
+    monthlyPayment=Math.max(0,Number(monthlyPayment)||0);
+    months=Math.max(0,Math.floor(Number(months)||0));
+    if(!monthlyPayment||!months)return 0;
+    const rate=Math.max(0,Number(annualRate)||0)/1200;
+    return rate?monthlyPayment*(1-Math.pow(1+rate,-months))/rate:monthlyPayment*months;
+  }
+  function mortgagePolicyCap(price,scope){
+    price=won(price);
+    if(scope!=="capital")return Infinity;
+    if(price<=1500000000)return 600000000;
+    if(price<=2500000000)return 400000000;
+    return 200000000;
+  }
+  function calculateLoanCapacity(input={}){
+    const price=won(input.price),collateralValue=won(input.collateralValue)||price,annualIncome=won(input.annualIncome),existingAnnualDebtService=won(input.existingAnnualDebtService);
+    const hasIncomeInput=Object.prototype.hasOwnProperty.call(input,"annualIncome");
+    const mortgageLtv=clamp(input.mortgageLtv,0,100),dsrLimit=clamp(input.dsrLimit||40,0,100);
+    const mortgageInterestRate=clamp(input.mortgageInterestRate,0,30),stressRate=clamp(input.stressRate,0,10);
+    const mortgageYears=Math.max(1,Math.min(50,Math.floor(Number(input.mortgageYears)||30)));
+    const ltvLimit=Math.round(collateralValue*mortgageLtv/100);
+    const annualRoom=Math.max(0,annualIncome*dsrLimit/100-existingAnnualDebtService);
+    const dsrRate=mortgageInterestRate+stressRate;
+    const dsrLimitAmount=Math.round(annuityPrincipal(annualRoom/12,dsrRate,mortgageYears*12));
+    const policyCap=mortgagePolicyCap(collateralValue,input.policyScope||"none");
+    const manualCap=won(input.manualMortgageCap);
+    const limits=[
+      {key:"ltv",label:"LTV",amount:ltvLimit},
+      ...(hasIncomeInput?[{key:"dsr",label:"스트레스 DSR",amount:dsrLimitAmount}]:[]),
+      ...(Number.isFinite(policyCap)?[{key:"policy",label:"수도권 주담대 총액상한",amount:policyCap}]:[]),
+      ...(manualCap?[{key:"manual",label:"금융기관 별도한도",amount:manualCap}]:[])
+    ];
+    const binding=limits.reduce((lowest,row)=>row.amount<lowest.amount?row:lowest,limits[0]||{key:"none",label:"한도 없음",amount:0});
+    return {collateralValue,annualIncome,existingAnnualDebtService,mortgageLtv,dsrLimit,mortgageInterestRate,stressRate,mortgageYears,dsrRate,annualRoom,ltvLimit,dsrLimitAmount,policyCap,manualCap,limits,binding,estimatedLimit:Math.max(0,binding.amount)};
+  }
+  function buildMonthlyInterestSchedule(loans,balanceDate,annualRate,paymentMode){
+    balanceDate=normalizeDate(balanceDate);
+    const valid=(loans||[]).filter(row=>row.amount>0&&normalizeDate(row.dueDate)).map(row=>({...row,dueDate:normalizeDate(row.dueDate)}));
+    if(!valid.length||!balanceDate||annualRate<=0||paymentMode==="free")return [];
+    const first=valid.map(row=>row.dueDate).sort()[0];
+    const cursor=new Date(first+"T00:00:00"),end=new Date(balanceDate+"T00:00:00");
+    cursor.setDate(1);
+    const rows=[];
+    let cumulativeInterest=0;
+    while(cursor<end&&rows.length<600){
+      const monthStart=new Date(cursor),nextMonth=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+      const periodEnd=nextMonth<end?nextMonth:end;
+      let interest=0,outstanding=0;
+      valid.forEach(loan=>{
+        const due=new Date(loan.dueDate+"T00:00:00");
+        if(due<periodEnd){
+          const activeStart=due>monthStart?due:monthStart;
+          const days=Math.max(0,(periodEnd-activeStart)/86400000);
+          const yearDays=new Date(activeStart.getFullYear(),1,29).getMonth()===1?366:365;
+          interest+=loan.amount*annualRate/100*days/yearDays;
+          outstanding+=loan.amount;
+        }
+      });
+      interest=Math.round(interest);cumulativeInterest+=interest;
+      rows.push({month:`${monthStart.getFullYear()}-${String(monthStart.getMonth()+1).padStart(2,"0")}`,outstanding,interest,cumulativeInterest,paidInterest:paymentMode==="monthly"?interest:0});
+      cursor.setMonth(cursor.getMonth()+1);
+    }
+    return rows;
+  }
+  function dailySimpleInterest(amount,from,to,annualRate){
+    from=normalizeDate(from);to=normalizeDate(to);
+    if(!from||!to||to<=from||annualRate<=0)return 0;
+    let cursor=new Date(from+"T00:00:00"),end=new Date(to+"T00:00:00"),interest=0;
+    while(cursor<end){
+      const nextYear=new Date(cursor.getFullYear()+1,0,1),periodEnd=nextYear<end?nextYear:end;
+      const days=(periodEnd-cursor)/86400000;
+      const yearDays=new Date(cursor.getFullYear(),1,29).getMonth()===1?366:365;
+      interest+=amount*annualRate/100*days/yearDays;
+      cursor=periodEnd;
+    }
+    return Math.round(interest);
+  }  function buildFundingPlan(input){
     const price=won(input.price),extras=won(input.extras),cashNow=won(input.cashNow),reserve=won(input.reserve),monthlySaving=won(input.monthlySaving);
     const contractDate=normalizeDate(input.contractDate),moveInDate=normalizeDate(input.moveInDate),baseDate=normalizeDate(input.baseDate)||contractDate;
-    const legacyInterimLoanEnabled=clamp(Number(input.interimLoanRate)||0,0,100)>0,mortgageLtv=clamp(Number(input.mortgageLtv)||0,0,100);
-    const interimInterestRate=clamp(Number(input.interimInterestRate)||0,0,30),includeInterimInterest=Boolean(input.includeInterimInterest)&&interimInterestRate>0;
-    const mortgageTarget=Math.round(price*mortgageLtv/100);
+    const legacyInterimLoanEnabled=clamp(Number(input.interimLoanRate)||0,0,100)>0;
+    const interimInterestRate=clamp(Number(input.interimInterestRate)||0,0,30);
+    const interestPaymentMode=input.interestPaymentMode||(input.includeInterimInterest?"deferred":"free");
+    const includeInterimInterest=interestPaymentMode!=="free"&&interimInterestRate>0;
+    const loanCapacity=calculateLoanCapacity({...input,price});
+    const mortgageTarget=loanCapacity.estimatedLimit;
     const source=(input.payments||[]).map((payment,index)=>({...payment,index,rate:Number(payment.rate)||0}));
     const resolved=source.map(payment=>{
       const phase=payment.phaseKind||payment.kind;
@@ -477,7 +556,19 @@
       return {...payment,phaseKind:phase,dueDate,dueText:dueDate||payment.dueLabel||"날짜 확인"};
     }).sort((a,b)=>a.dueDate&&b.dueDate?a.dueDate.localeCompare(b.dueDate)||a.index-b.index:a.dueDate?-1:b.dueDate?1:a.index-b.index);
     const balanceDate=moveInDate||resolved.find(payment=>payment.phaseKind==="balance"&&payment.dueDate)?.dueDate||"";
-    let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0,deferredInterest=0,interestIncomplete=false;
+    const interimLoans=resolved.filter(payment=>payment.kind==="interim"&&!payment.extra&&(payment.loanEnabled!==undefined?Boolean(payment.loanEnabled):legacyInterimLoanEnabled)).map(payment=>({label:payment.label,dueDate:payment.dueDate,amount:payment.fixedAmount!==undefined&&payment.fixedAmount!==null?won(payment.fixedAmount):Math.round(price*payment.rate/100)}));
+    const interestSchedule=buildMonthlyInterestSchedule(interimLoans,balanceDate,interimInterestRate,interestPaymentMode);
+    const installmentInterest=interimLoans.map(loan=>({...loan,interest:includeInterimInterest?dailySimpleInterest(loan.amount,loan.dueDate,balanceDate,interimInterestRate):0}));
+    const totalInterimInterest=installmentInterest.reduce((total,row)=>total+row.interest,0);
+    if(interestSchedule.length){
+      const roundedTotal=interestSchedule.reduce((total,row)=>total+row.interest,0);
+      interestSchedule.at(-1).interest+=totalInterimInterest-roundedTotal;
+      let cumulative=0;interestSchedule.forEach(row=>{cumulative+=row.interest;row.cumulativeInterest=cumulative;row.paidInterest=interestPaymentMode==="monthly"?row.interest:0});
+    }
+    const deferredInterest=interestPaymentMode==="deferred"?totalInterimInterest:0;
+    const monthlyPaidInterest=interestPaymentMode==="monthly"?totalInterimInterest:0;
+    let interimOutstanding=0,cumulativeOwn=0,worstShortage=0,firstShortage=null,peakInterim=0;
+    const interestIncomplete=includeInterimInterest&&interimLoans.some(row=>!row.dueDate);
     const usableStart=Math.max(0,cashNow-reserve);
     const rows=resolved.map(payment=>{
       const scheduled=payment.fixedAmount!==undefined&&payment.fixedAmount!==null?won(payment.fixedAmount):Math.round(price*payment.rate/100);
@@ -489,14 +580,8 @@
         own=scheduled-financing;
         interimOutstanding+=financing;
         peakInterim=Math.max(peakInterim,interimOutstanding);
-        if(includeInterimInterest&&financing){
-          if(payment.dueDate&&balanceDate){
-            const months=Math.max(0,monthsBetween(payment.dueDate,balanceDate));
-            interest=Math.round(financing*interimInterestRate/100*months/12);
-            deferredInterest+=interest;
-          }else interestIncomplete=true;
-        }
-        note=loanEnabled?`해당 회차 전액 대출 실행${interest?` · 후불이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`:"해당 회차 전액 자납";
+        interest=installmentInterest.find(row=>row.label===payment.label&&row.dueDate===payment.dueDate)?.interest||0;
+        note=loanEnabled?`해당 회차 전액 대출 실행${interest?` · 발생이자 ${interest.toLocaleString("ko-KR")}원 예상`:""}`:"해당 회차 전액 자납";
       }else if(payment.kind==="balance"&&!payment.extra){
         const closingNeed=scheduled+interimOutstanding;
         financing=Math.min(closingNeed,mortgageTarget);
@@ -507,18 +592,30 @@
         interimOutstanding=0;
       }
       const elapsedMonths=baseDate&&payment.dueDate?Math.max(0,Math.floor(monthsBetween(baseDate,payment.dueDate)+1e-6)):0;
-      const accumulatedSaving=monthlySaving*elapsedMonths;
+      const accumulatedSavingGross=monthlySaving*elapsedMonths;
+      const paidInterestToDate=interestPaymentMode==="monthly"&&payment.dueDate?interestSchedule.filter(row=>row.month<payment.dueDate.slice(0,7)).reduce((total,row)=>total+row.paidInterest,0):0;
+      const accumulatedSaving=accumulatedSavingGross-paidInterestToDate;
       const cashBefore=usableStart+accumulatedSaving-cumulativeOwn;
       const cashAfter=cashBefore-own;
       cumulativeOwn+=own;
       const shortage=Math.max(0,-cashAfter);
       if(shortage&&!firstShortage)firstShortage={label:payment.label,dueText:payment.dueText,shortage};
       worstShortage=Math.max(worstShortage,shortage);
-      return {...payment,phaseKind:phase,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,note,interest,closingExtras};
+      return {...payment,phaseKind:phase,gross,scheduled,financing,own,cashBefore,cashAfter,shortage,elapsedMonths,accumulatedSaving,accumulatedSavingGross,paidInterestToDate,note,interest,closingExtras};
     });
     const totalOwn=rows.reduce((total,row)=>total+row.own,0);
     const optionTotal=source.filter(row=>row.extra).reduce((total,row)=>total+won(row.fixedAmount),0);
-    return {price,extras,optionTotal,totalCost:price+extras+optionTotal+deferredInterest,cashNow,reserve,usableStart,monthlySaving,baseDate,interimInterestRate,includeInterimInterest,deferredInterest,interestIncomplete,mortgageLtv,mortgageTarget,peakInterim,totalOwn,worstShortage,firstShortage,rows,rateTotal:source.filter(row=>!row.extra).reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance"&&!row.extra)||null};
+    const monthsToMoveIn=baseDate&&balanceDate?Math.max(0,Math.floor(monthsBetween(baseDate,balanceDate)+1e-6)):0;
+    const grossSavingToMoveIn=monthlySaving*monthsToMoveIn;
+    const ownCapitalAtMoveIn=usableStart+grossSavingToMoveIn;
+    const netOwnCapitalAfterMonthlyInterest=ownCapitalAtMoveIn-monthlyPaidInterest;
+    const totalCost=price+extras+optionTotal+totalInterimInterest;
+    const mortgageRequired=Math.max(0,totalCost-ownCapitalAtMoveIn);
+    const loanShortage=Math.max(0,mortgageRequired-mortgageTarget);
+    const finalSurplus=Math.max(0,ownCapitalAtMoveIn+mortgageTarget-totalCost);
+    let cumulativePrincipal=0,cumulativeInstallmentInterest=0;
+    const interestByInstallment=installmentInterest.map(row=>{cumulativePrincipal+=row.amount;cumulativeInstallmentInterest+=row.interest;return {...row,cumulativePrincipal,cumulativeInterest:cumulativeInstallmentInterest}});
+    return {price,extras,optionTotal,totalCost,cashNow,reserve,usableStart,monthlySaving,baseDate,interimInterestRate,interestPaymentMode,includeInterimInterest,deferredInterest,monthlyPaidInterest,totalInterimInterest,interestSchedule,interestByInstallment,interestIncomplete,loanCapacity,mortgageLtv:loanCapacity.mortgageLtv,mortgageTarget,peakInterim,totalOwn,ownCapitalAtMoveIn,netOwnCapitalAfterMonthlyInterest,grossSavingToMoveIn,mortgageRequired,loanShortage,finalSurplus,worstShortage,firstShortage,rows,rateTotal:source.filter(row=>!row.extra).reduce((total,row)=>total+row.rate,0),closingRow:rows.find(row=>row.kind==="balance"&&!row.extra)||null};
   }
   function normalizeDate(value){
     const raw=String(value||"").trim();
@@ -728,7 +825,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

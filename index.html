@@ -310,11 +310,23 @@
           <section class="assumption-panel loan-assumption">
             <div class="assumption-title"><span>01</span><div><h4>중도금 회차와 대출이자</h4><p>대출 실행 회차만 골라 입주 때 낼 후불이자까지 추정합니다.</p></div></div>
             <div class="funding-grid compact-funding-grid">
-              <div class="interim-choice-wrap"><div class="interim-choice-title"><b>중도금 회차별 조달방식</b><small>공고문 대출 알선 회차를 자동 제안합니다</small></div><div id="interimFundingChoices" class="interim-funding-choices"></div></div>
-              <label>중도금 예상 연이율<input id="interimInterestRate" type="number" min="0" max="30" step="0.1" value="0"><span class="suffix">%</span></label>
-              <label>입주시 예상 주담대 LTV<input id="mortgageLtv" type="number" min="0" max="100" value="0"><span class="suffix">%</span></label>
-              <label class="choice-toggle"><input id="includeInterimInterest" type="checkbox" checked><span><b>이자후불제 반영</b><small>각 실행일부터 잔금일까지 단리 추정</small></span></label>
+              <div class="interim-choice-wrap"><div class="interim-choice-title"><b>중도금 회차별 조달방식</b><small>각 회차는 전액 대출 또는 전액 자납으로 선택합니다</small></div><div id="interimFundingChoices" class="interim-funding-choices"></div></div>
+              <label>중도금 예상 연이율<input id="interimInterestRate" type="number" min="0" max="30" step="0.1" value="4.5"><span class="suffix">%</span></label>
+              <label>이자 납부 방식<select id="interestPaymentMode"><option value="deferred">이자후불제 · 입주 때 일괄 납부</option><option value="monthly">매월 직접 납부</option><option value="free">무이자</option></select><small class="field-help">발생이자는 매월 보여주고 실제 현금 차감 시점만 달라집니다</small></label>
             </div>
+            <div class="loan-capacity-inputs">
+              <div class="loan-capacity-heading"><b>잔금대출 가능액 계산</b><small>LTV·스트레스 DSR·수도권 총액상한 중 가장 작은 값을 적용</small></div>
+              <label>입주 시 예상 담보가치<input id="collateralValue" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span><small class="field-help">LTV·가격별 총액상한 계산 기준</small></label><label>부부 합산 연소득<input id="annualIncome" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+              <label>기존대출 연간 원리금<input id="existingAnnualDebtService" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+              <label>적용 LTV<input id="mortgageLtv" type="number" min="0" max="100" value="40"><span class="suffix">%</span></label>
+              <label>예상 주담대 금리<input id="mortgageInterestRate" type="number" min="0" max="30" step="0.1" value="4.5"><span class="suffix">%</span></label>
+              <label>스트레스 가산금리<input id="stressRate" type="number" min="0" max="10" step="0.1" value="3"><span class="suffix">%</span></label>
+              <label>DSR 한도<input id="dsrLimit" type="number" min="0" max="100" value="40"><span class="suffix">%</span></label>
+              <label>상환기간<input id="mortgageYears" type="number" min="1" max="50" value="30"><span class="suffix">년</span></label>
+              <label>주담대 총액상한<select id="policyScope"><option value="capital">수도권·규제지역 현행 상한 적용</option><option value="none">총액상한 미적용</option></select></label>
+              <label>금융기관 별도한도<input id="manualMortgageCap" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span><small class="field-help">없으면 0원</small></label>
+            </div>
+            <div id="loanCapacityDetail"></div>
           </section>
 
           <section class="assumption-panel tax-assumption">
@@ -333,6 +345,13 @@
       <div id="fundingHero"></div>
       <div id="fundingSummary" class="funding-summary"></div>
 
+      <article class="card interest-card">
+        <div class="card-head"><div><h3>중도금 이자 타임라인</h3><p>대출을 실행한 회차별 발생이자와 매월 부담액을 따로 보여줍니다.</p></div><span class="rounding">일할계산 예상치</span></div>
+        <div id="installmentInterest"></div>
+        <div class="monthly-interest-head"><div><h4>월별 이자·저축 여력</h4><p>월 추가저축에서 실제 납부이자를 뺀 순저축 가능액입니다.</p></div><div id="interestModeBadge"></div></div>
+        <div id="monthlyInterest"></div>
+      </article>
+
       <article class="card phase-card">
         <div class="card-head"><div><h3>계약 → 중도금 → 입주 3단계</h3><p>각 단계에서 실제로 내 돈과 대출이 얼마나 들어가는지 묶어 보여줍니다.</p></div><span class="rounding">대출·자기자금 분리</span></div>
         <div id="fundingPhases" class="funding-phases"></div>
@@ -348,7 +367,7 @@
         <div>
           <p>기본 취득세는 2026년 지방세법상 주택 유상거래 세율을 적용하고, 지방교육세와 전용 85㎡ 초과 시 농어촌특별세를 더한 예상치입니다. 생애최초 감면·다주택 중과·지자체 감면 등은 실제 잔금일 요건과 위택스 계산 결과를 확인하세요.</p>
           <p class="tax-source-links">공식 기준: <a href="https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&amp;joBrNo=00&amp;joNo=0011&amp;lsiSeq=282559&amp;urlMode=lsScJoRltInfoR" target="_blank" rel="noopener">지방세법 제11조</a> · <a href="https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&amp;lsJoLnkSeq=1026499929" target="_blank" rel="noopener">지방교육세 제151조</a> · <a href="https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&amp;lsJoLnkSeq=1025285313" target="_blank" rel="noopener">생애최초 감면</a></p>
-          <p>중도금 이자는 입력 연이율을 각 대출 실행일부터 예상 잔금일까지 단리로 추정합니다. 실제 이자율, 보증료, 인지세, DSR·LTV 및 대출 실행 여부는 금융기관 심사에 따라 달라집니다.</p>
+          <p>중도금 이자는 실제 실행일부터 잔금일까지 일할계산한 예상치이며, 이자후불제는 발생이자를 입주 때 일괄 반영하고 매월 납부는 월별 현금흐름에서 차감합니다. 잔금대출 한도는 LTV·스트레스 DSR·수도권 총액상한의 최솟값이며 실제 인정소득, 기존부채 산정, 금리유형과 은행 심사에 따라 달라집니다.</p>
         </div>
       </details>
       <div class="actions split"><button class="ghost" data-go="strategy">← 청약 전략</button><button class="ghost" data-go="notice">공고 숫자 다시 확인</button></div>

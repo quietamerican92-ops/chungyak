@@ -67,8 +67,8 @@
   ];
   const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
   const NOTICE_FIELDS=["projectName","noticeDate","location","housingType","priorityRegion","priorityYears","specialMonths","generalMonths","generalHeadRequired"];
-  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","includeInterimInterest","mortgageLtv","taxMode","taxManualRate","includeAcquisitionTax"];
-  const FINANCE_CHECK_IDS=new Set(["includeInterimInterest","includeAcquisitionTax"]);
+  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","interestPaymentMode","collateralValue","annualIncome","existingAnnualDebtService","mortgageLtv","mortgageInterestRate","stressRate","dsrLimit","mortgageYears","policyScope","manualMortgageCap","taxMode","taxManualRate","includeAcquisitionTax"];
+  const FINANCE_CHECK_IDS=new Set(["includeAcquisitionTax"]);
   let notices=readStorage(NOTICES_KEY,{});
   if(!Object.keys(notices).length)notices[DEFAULT_NOTICE.id]=clone(DEFAULT_NOTICE);
   let activeId=localStorage.getItem(ACTIVE_KEY)||DEFAULT_NOTICE.id;
@@ -519,6 +519,8 @@
       if(!$(id)||data[id]===undefined)return;
       FINANCE_CHECK_IDS.has(id)?$(id).checked=Boolean(data[id]):$(id).value=data[id];
     });
+    if(data.annualIncome===undefined&&$("annualIncome")){const profile=profileData();$("annualIncome").value=formatNumberInput((num(profile.people.a.monthlyIncome)+num(profile.people.b.monthlyIncome))*12)}
+    if(data.policyScope===undefined&&$("policyScope"))$("policyScope").value=/(서울|경기|인천)/.test(String(notice.location||""))?"capital":"none";
     setupMoneyInputs($("finance"));
   }
   function saveFundingInputs(){
@@ -561,6 +563,7 @@
     if(rows.some(row=>row.size===current))$("planSize").value=current;
     const selected=rows.find(row=>row.size===$("planSize").value)||rows[0];
     if(resetPrice||!num($("planPrice").value))$("planPrice").value=formatNumberInput(selected?.max);
+    if(resetPrice||!num($("collateralValue").value))$("collateralValue").value=formatNumberInput(selected?.max);
     if(!$("contractDate").value&&notice.expectedContractDate)$("contractDate").value=notice.expectedContractDate;
     if(!$("moveInDate").value&&notice.expectedMoveInDate)$("moveInDate").value=notice.expectedMoveInDate;
     setupDateInputs();setupMoneyInputs($("finance"));renderOptionChoices();renderInterimFundingChoices();
@@ -599,7 +602,7 @@
     });
     const tax=R.acquisitionCostEstimate(price,num(sizeRow?.area),{mode:$("taxMode").value,manualTotalRate:num($("taxManualRate").value)});
     const manualExtras=num($("planExtras").value),includedTax=$("includeAcquisitionTax").checked?tax.total:0;
-    return {baseDate:today,price,size,area:num(sizeRow?.area),manualExtras,tax,includedTax,extras:manualExtras+includedTax,optionTotal:selectedOptions.reduce((sum,row)=>sum+num(row.price),0),selectedOptions,interimModes,cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate,moveInDate,interimInterestRate:num($("interimInterestRate").value),includeInterimInterest:$("includeInterimInterest").checked,mortgageLtv:num($("mortgageLtv").value),payments:[...basePayments,...extraPayments]};
+    return {baseDate:today,price,size,area:num(sizeRow?.area),manualExtras,tax,includedTax,extras:manualExtras+includedTax,optionTotal:selectedOptions.reduce((sum,row)=>sum+num(row.price),0),selectedOptions,interimModes,cashNow:num($("cashNow").value),reserve:num($("cashReserve").value),monthlySaving:num($("monthlySaving").value),contractDate,moveInDate,interimInterestRate:num($("interimInterestRate").value),interestPaymentMode:$("interestPaymentMode").value,collateralValue:num($("collateralValue").value),annualIncome:num($("annualIncome").value),existingAnnualDebtService:num($("existingAnnualDebtService").value),mortgageLtv:num($("mortgageLtv").value),mortgageInterestRate:num($("mortgageInterestRate").value),stressRate:num($("stressRate").value),dsrLimit:num($("dsrLimit").value),mortgageYears:num($("mortgageYears").value),policyScope:$("policyScope").value,manualMortgageCap:num($("manualMortgageCap").value),payments:[...basePayments,...extraPayments]};
   }
   function minimumMonthlySaving(input){
     const zero={...input,monthlySaving:0};
@@ -644,6 +647,21 @@
       return `<article class="cashflow-row ${row.shortage?"cashflow-risk":""}"><div class="cashflow-sequence"><span>${String(index+1).padStart(2,"0")}</span><i></i></div><div class="cashflow-date"><b>${esc(row.dueText.replaceAll("-","."))}</b><small>${phaseLabel(row.phaseKind||row.kind)}</small></div><div class="cashflow-main"><div><h4>${esc(row.label)}</h4><span>${row.extra?"선택품목":`${row.rate.toFixed(1)}%`} · ${esc(row.note)}</span></div><b>${formatWon(row.gross)}</b><div class="cashflow-scale" style="width:${Math.max(18,scale)}%"><i style="width:${loanWidth}%"></i></div><div class="cashflow-split"><span>내 현금 <b>${formatWonShort(row.own)}</b></span><span>대출 <b>${row.financing?formatWonShort(row.financing):"없음"}</b></span><span>누적저축 <b>${formatWonShort(row.accumulatedSaving)}</b></span></div></div><div class="cashflow-balance ${row.cashAfter<0?"negative":""}"><small>납부 후 가용현금</small><b>${formatWonShort(row.cashAfter)}</b>${row.shortage?`<em>${formatWonShort(row.shortage)} 부족</em>`:"<span>O</span>"}</div></article>`;
     }).join("")}</div>`;
   }
+  function monthlyLoanPayment(principal,annualRate,years){const rate=num(annualRate)/1200,months=Math.max(1,num(years)*12);return rate?principal*rate*Math.pow(1+rate,months)/(Math.pow(1+rate,months)-1):principal/months}
+  function renderLoanCapacity(plan){
+    const capacity=plan.loanCapacity,plannedLoan=Math.min(plan.mortgageRequired,capacity.estimatedLimit),plannedPayment=Math.round(monthlyLoanPayment(plannedLoan,capacity.mortgageInterestRate,capacity.mortgageYears));
+    const limitItems=capacity.limits.map(row=>`<div class="limit-item ${row.key===capacity.binding.key?"binding":""}"><span>${esc(row.label)}</span><b>${formatWonShort(row.amount)}</b>${row.key===capacity.binding.key?"<em>최종 적용</em>":""}</div>`).join("");
+    const annualRoom=Math.max(0,capacity.annualRoom),monthlyRoom=annualRoom/12;
+    $("loanCapacityDetail").innerHTML=`<div class="loan-capacity-result"><div class="limit-result-head"><div><span>예상 잔금대출 한도</span><strong>${formatWonShort(capacity.estimatedLimit)}</strong></div><p><b>${esc(capacity.binding.label)}</b>이 가장 먼저 한도를 막습니다.<br>담보가치 ${formatWonShort(capacity.collateralValue)} · DSR 심사금리 ${capacity.dsrRate.toFixed(1)}%<br>실제금리 ${capacity.mortgageInterestRate.toFixed(1)}% 가정 시 필요대출 월 상환액 약 ${formatWonShort(plannedPayment)}</p></div><div class="limit-lane">${limitItems}</div><small>원리금균등 ${capacity.mortgageYears}년 가정. 은행 인정소득·금리유형·기존대출 만기와 실제 입주 시점 규제로 결과가 달라질 수 있습니다.</small></div>`;
+  }
+  function renderInterestAnalysis(plan){
+    const modeLabels={deferred:"이자후불 · 입주 때 납부",monthly:"매월 직접 납부",free:"무이자"};
+    $("interestModeBadge").innerHTML=`<span class="mode-badge">${esc(modeLabels[plan.interestPaymentMode]||modeLabels.deferred)}</span>`;
+    const installmentRows=plan.interestByInstallment||[];
+    $("installmentInterest").innerHTML=installmentRows.length?`<div class="interest-overview"><div><span>대출 실행 회차</span><b>${installmentRows.length}회</b></div><div><span>최대 중도금대출</span><b>${formatWonShort(plan.peakInterim)}</b></div><div><span>총 발생이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></div><div><span>입주 때 낼 후불이자</span><b>${formatWonShort(plan.deferredInterest)}</b></div></div><div class="table-scroll"><table class="finance-table"><thead><tr><th>회차</th><th>실행일</th><th>실행 원금</th><th>이 회차 발생이자</th><th>누적 대출원금</th><th>누적 발생이자</th></tr></thead><tbody>${installmentRows.map(row=>`<tr><td>${esc(row.label)}</td><td>${esc(row.dueDate.replaceAll("-","."))}</td><td class="num-cell">${formatWon(row.amount)}</td><td class="num-cell">${formatWon(row.interest)}</td><td class="num-cell">${formatWon(row.cumulativePrincipal)}</td><td class="num-cell interest-accent">${formatWon(row.cumulativeInterest)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="option-empty">대출 실행으로 선택한 중도금 회차가 없거나 이율·날짜가 입력되지 않았습니다.</div>`;
+    const monthly=plan.interestSchedule||[],maxInterest=Math.max(0,...monthly.map(row=>row.interest)),average=monthly.length?Math.round(plan.totalInterimInterest/monthly.length):0;
+    $("monthlyInterest").innerHTML=monthly.length?`<div class="monthly-stats"><span>월 최대 발생이자 <b>${formatWon(maxInterest)}</b></span><span>월평균 발생이자 <b>${formatWon(average)}</b></span><span>입주까지 총이자 <b>${formatWon(plan.totalInterimInterest)}</b></span></div><div class="monthly-interest-grid"><div class="interest-chart">${monthly.map(row=>`<div class="interest-bar-row"><span>${esc(row.month.replace("-","."))}</span><i><b style="width:${maxInterest?Math.max(2,row.interest/maxInterest*100):0}%"></b></i><strong>${formatWonShort(row.interest)}</strong></div>`).join("")}</div><div class="table-scroll monthly-table-wrap"><table class="finance-table"><thead><tr><th>월</th><th>대출잔액</th><th>월 발생이자</th><th>실제 월 납부</th><th>이자 반영 순저축</th><th>누적 발생이자</th></tr></thead><tbody>${monthly.map(row=>{const net=plan.monthlySaving-row.paidInterest;return `<tr><td>${esc(row.month.replace("-","."))}</td><td class="num-cell">${formatWon(row.outstanding)}</td><td class="num-cell">${formatWon(row.interest)}</td><td class="num-cell">${row.paidInterest?formatWon(row.paidInterest):"0원"}</td><td class="num-cell ${net<0?"money-negative":""}">${formatWon(net)}</td><td class="num-cell interest-accent">${formatWon(row.cumulativeInterest)}</td></tr>`}).join("")}</tbody></table></div></div>`:`<div class="option-empty">월별 이자표를 만들려면 대출 회차, 이율, 실행일과 잔금일이 필요합니다.</div>`;
+  }
   function renderFundingPlan(){
     const input=fundingInput();
     renderTaxPreview(input);
@@ -651,27 +669,30 @@
     const cashExcess=Math.max(0,input.reserve-input.cashNow),usable=Math.max(0,input.cashNow-input.reserve);
     $("cashReserve").setAttribute("aria-invalid",cashExcess?"true":"false");
     $("usableCashPreview").className=`usable-cash-preview${cashExcess?" is-invalid":""}`;
-    $("usableCashPreview").textContent=cashExcess?`남겨둘 금액이 현재 현금보다 ${formatWon(cashExcess)} 큽니다. 청약에 투입 가능한 시작 현금은 0원입니다.`:`계약 전 투입 가능 현금 ${formatWon(usable)} = 현재 현금 ${formatWon(input.cashNow)} − 남겨둘 금액 ${formatWon(input.reserve)}`;
+    $("usableCashPreview").textContent=cashExcess?`남겨둘 금액이 현재 현금보다 ${formatWon(cashExcess)} 큽니다. 이 항목은 추가 자금이 아니라 현재 현금에서 빼놓는 돈이므로 청약에 쓸 시작 현금은 0원입니다.`:`청약에 투입 가능한 시작 현금 ${formatWon(usable)} = 현재 현금 ${formatWon(input.cashNow)} − 남겨둘 금액 ${formatWon(input.reserve)}`;
     if(!input.price||!Array.isArray(input.payments)||!input.payments.length){
       $("financeWarning").innerHTML="<div class='alert bad'>분양가 또는 납부일정이 없습니다. 모집공고 화면에서 자동 추출값을 확인하거나 직접 입력해 주세요.</div>";
-      $("fundingHero").innerHTML="";$("fundingSummary").innerHTML="";$("fundingPhases").innerHTML="";$("fundingTimeline").innerHTML="";return;
+      ["fundingHero","fundingSummary","loanCapacityDetail","installmentInterest","monthlyInterest","fundingPhases","fundingTimeline"].forEach(id=>$(id).innerHTML="");return;
     }
     const plan=R.buildFundingPlan(input),minimumSaving=minimumMonthlySaving(input),warnings=[];
-    if(input.interimModes.includes("review")||String(notice.interimLoanSource||"").includes("확인 필요"))warnings.push({type:"warn",message:"대출 실행 여부가 확인되지 않은 중도금 회차가 있습니다. 공고문 또는 협약은행 안내에 따라 대출·자납을 선택하세요."});
-    if(input.reserve>input.cashNow)warnings.push({type:"bad",message:`남겨둘 금액 ${formatWonShort(input.reserve)}이 현재 가용현금 ${formatWonShort(input.cashNow)}보다 큽니다. 현재 입력대로면 청약에 쓸 시작 현금은 0원입니다.`});
-    if(Math.abs(plan.rateTotal-100)>.01)warnings.push({type:"bad",message:`납부비율 합계가 ${plan.rateTotal.toFixed(1)}%입니다. 공고문 표와 다시 대조하세요.`});
-    if(!input.contractDate)warnings.push({type:"warn",message:"예상 계약일을 넣으면 계약일까지 모을 수 있는 돈을 계산합니다."});
-    if(!input.moveInDate)warnings.push({type:"warn",message:"예상 입주·잔금일을 넣으면 중도금 후불이자와 잔금 시점 저축액을 계산합니다."});
-    if(plan.interestIncomplete)warnings.push({type:"warn",message:"일부 중도금 납부일이 없어 후불이자를 전부 계산하지 못했습니다."});
+    if(input.interimModes.includes("review")||String(notice.interimLoanSource||"").includes("확인 필요"))warnings.push({type:"warn",message:"대출 실행 여부가 확인되지 않은 중도금 회차가 있습니다. 공고문 또는 집단대출 안내에 따라 대출·자납을 선택하세요."});
+    if(input.reserve>input.cashNow)warnings.push({type:"bad",message:`남겨둘 금액 ${formatWonShort(input.reserve)}은 추가 자금이 아닙니다. 현재 현금 ${formatWonShort(input.cashNow)}에서 차감되므로 시작 현금은 0원입니다.`});
+    if(!input.annualIncome)warnings.push({type:"bad",message:"부부 합산 연소득이 0원이어서 DSR 기준 잔금대출 한도가 0원으로 계산됩니다."});
+    if(Math.abs(plan.rateTotal-100)>.01)warnings.push({type:"bad",message:`납부비율 합계가 ${plan.rateTotal.toFixed(1)}%입니다. 공고문 표를 다시 대조하세요.`});
+    if(!input.contractDate)warnings.push({type:"warn",message:"예상 계약일을 입력하면 계약일까지 모을 수 있는 돈을 계산합니다."});
+    if(!input.moveInDate)warnings.push({type:"warn",message:"예상 입주·잔금일을 입력하면 중도금 이자와 잔금일 자기자본을 계산합니다."});
+    if(plan.interestIncomplete)warnings.push({type:"warn",message:"일부 중도금 실행일이 없어 이자를 전부 계산하지 못했습니다."});
     if(input.tax.mode==="first_home"&&!input.tax.eligibleFirstHome)warnings.push({type:"warn",message:"분양가가 12억원을 초과해 생애최초 취득세 감면을 적용하지 않았습니다."});
-    if(plan.firstShortage)warnings.push({type:"bad",message:`${plan.firstShortage.dueText} ${plan.firstShortage.label}에서 ${formatWonShort(plan.firstShortage.shortage)}가 부족합니다.`});
+    if(plan.firstShortage)warnings.push({type:"bad",message:`납부 일정상 첫 자금공백은 ${plan.firstShortage.dueText} ${plan.firstShortage.label}, ${formatWonShort(plan.firstShortage.shortage)}입니다.`});
     $("financeWarning").innerHTML=warnings.map(item=>`<div class="alert ${item.type}">${esc(item.message)}</div>`).join("");
-    const coverage=plan.totalOwn?Math.max(0,Math.min(100,(plan.totalOwn-plan.worstShortage)/plan.totalOwn*100)):100;
-    const closingOwn=plan.rows.filter(row=>(row.phaseKind||row.kind)==="balance").reduce((sum,row)=>sum+row.own,0);
-    const savingText=minimumSaving===null?"계약 전 현금 보강 필요":minimumSaving?`${formatWonShort(minimumSaving)}/월`:"추가저축 없이 충족";
-    $("fundingHero").innerHTML=`<article class="funding-hero ${plan.worstShortage?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">MY FUNDING READINESS</span><h3>${plan.worstShortage?`자금이 ${formatWonShort(plan.worstShortage)} 부족합니다`:"현재 가정으로 모든 납부일을 통과합니다"}</h3><p>${plan.firstShortage?`첫 부족 시점은 ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}입니다.`:`현재 현금에서 ${formatWonShort(plan.reserve)}을 따로 남기고 계산한 결과입니다.`}</p><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>자기자금 충족도 ${coverage.toFixed(0)}%</small></div><div class="funding-hero-metrics"><div><span>잔금일 내 현금</span><b>${formatWonShort(closingOwn)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>잔금 포함 세금</span><b>${formatWonShort(input.includedTax)}</b></div></div></article>`;
-    $("fundingSummary").innerHTML=`<div><span>총 취득예산</span><b>${formatWonShort(plan.totalCost)}</b><small>분양가·옵션·세금·이자</small></div><div><span>선택한 발코니·옵션</span><b>${formatWonShort(input.optionTotal)}</b><small>${input.selectedOptions.length}개 선택 · 납부회차 반영</small></div><div><span>취득부대세</span><b>${formatWonShort(input.tax.total)}</b><small>실효세율 ${input.tax.totalRate.toFixed(2)}%</small></div><div><span>예상 중도금 이자</span><b>${formatWonShort(plan.deferredInterest)}</b><small>연 ${plan.interimInterestRate.toFixed(1)}% 단리</small></div><div><span>최대 중도금대출</span><b>${formatWonShort(plan.peakInterim)}</b><small>대출 ${input.interimModes.filter(mode=>mode==="loan").length}회 · 자납 ${input.interimModes.filter(mode=>mode==="self").length}회</small></div><div><span>예상 주담대 한도</span><b>${formatWonShort(plan.mortgageTarget)}</b><small>LTV ${plan.mortgageLtv.toFixed(0)}% 입력값</small></div><div><span>총 자기자금 투입</span><b>${formatWonShort(plan.totalOwn)}</b><small>대출을 제외한 실제 현금</small></div>`;
-    renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
+    const finalGap=plan.loanShortage,hasScheduleGap=Boolean(plan.firstShortage),isRisk=finalGap>0||hasScheduleGap;
+    const verdict=finalGap?`최종적으로 ${formatWonShort(finalGap)} 부족합니다`:hasScheduleGap?"총액은 맞지만 납부 중 자금공백이 있습니다":"현재 가정으로 가능합니다";
+    const verdictCopy=finalGap?`필요 대출 ${formatWonShort(plan.mortgageRequired)}보다 예상 한도 ${formatWonShort(plan.mortgageTarget)}가 작습니다.`:hasScheduleGap?`${plan.firstShortage.dueText}까지 현금 투입 시점을 앞당겨야 합니다.`:`입주까지 마련할 자기자본과 예상 대출 한도가 총 필요자금을 충족합니다.`;
+    const coverage=plan.totalCost?Math.max(0,Math.min(100,(plan.ownCapitalAtMoveIn+plan.mortgageTarget)/plan.totalCost*100)):100;
+    const savingText=minimumSaving===null?"계약 전 현금 보강 필요":minimumSaving?`${formatWonShort(minimumSaving)}/월`:"현재 저축액으로 충족";
+    $("fundingHero").innerHTML=`<article class="funding-hero ${isRisk?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">FUNDING VERDICT</span><h3>${verdict}</h3><p>${esc(verdictCopy)}</p><div class="capital-equation"><span><small>입주까지 자기자본</small><b>${formatWonShort(plan.ownCapitalAtMoveIn)}</b></span><i>+</i><span><small>예상 대출한도</small><b>${formatWonShort(plan.mortgageTarget)}</b></span><i>−</i><span><small>총 필요자금</small><b>${formatWonShort(plan.totalCost)}</b></span></div><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>총 필요자금 충족도 ${coverage.toFixed(0)}%</small></div><div class="funding-hero-metrics"><div><span>실제로 필요한 잔금대출</span><b>${formatWonShort(plan.mortgageRequired)}</b></div><div><span>대출한도를 막는 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>총 중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></div></div></article>`;
+    $("fundingSummary").innerHTML=`<div><span>총 필요자금</span><b>${formatWonShort(plan.totalCost)}</b><small>분양가·옵션·세금·이자</small></div><div><span>입주까지 마련 자기자본</span><b>${formatWonShort(plan.ownCapitalAtMoveIn)}</b><small>시작현금 + 입주까지 총저축</small></div><div><span>필요 잔금대출</span><b>${formatWonShort(plan.mortgageRequired)}</b><small>총 필요자금 − 자기자본</small></div><div><span>예상 대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b><small>${esc(plan.loanCapacity.binding.label)} 적용</small></div><div class="${finalGap?"funding-risk":"funding-safe"}"><span>${finalGap?"최종 부족액":"최종 여유액"}</span><b>${formatWonShort(finalGap||plan.finalSurplus)}</b><small>${finalGap?"자기자본 또는 대출 보강 필요":"현재 입력 기준"}</small></div><div><span>선택 옵션·취득세</span><b>${formatWonShort(input.optionTotal+input.includedTax)}</b><small>옵션 ${input.selectedOptions.length}개 · 세금 포함</small></div>`;
+    renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   function calculate(){
     renderProfileSummary();saveProfile();
