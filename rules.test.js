@@ -49,6 +49,11 @@ const generalA=R.generalScore("a",marriedProfile,notice);
 assert.deepStrictEqual({total:generalA.points,noHome:generalA.noHomePoints,dependents:generalA.dependentPoints,account:generalA.accountPoints},{total:40,noHome:14,dependents:15,account:11});
 const multiA=R.multiScore("a",marriedProfile,notice);
 assert.deepStrictEqual({total:multiA.points,children:multiA.childPoints,infants:multiA.infantPoints,noHome:multiA.noHomePoints,residence:multiA.residencePoints,account:multiA.accountPoints},{total:65,children:25,infants:5,noHome:20,residence:15,account:0});
+// 배우자 통장 가점 = 배우자 표점수의 50% 반올림, 최대 3점
+assert.strictEqual(R.spouseAccountPoints("2026-03-01",notice.noticeDate).points,1); // 6개월 미만: 표1→0.5→1
+assert.strictEqual(R.spouseAccountPoints("2024-01-16",notice.noticeDate).points,2); // 2.5년: 표4→2
+assert.strictEqual(R.spouseAccountPoints("2021-07-01",notice.noticeDate).points,3); // 5년: 표7→3.5→3(상한)
+assert.strictEqual(R.spouseAccountPoints("2010-01-01",notice.noticeDate).points,3); // 장기: 상한 3
 const cappedAccountProfile=JSON.parse(JSON.stringify(marriedProfile));
 cappedAccountProfile.people.a.account="2000-01-01";
 assert.strictEqual(R.generalScore("a",cappedAccountProfile,notice).accountPoints,17);
@@ -70,6 +75,20 @@ assert.strictEqual(R.eligibility("b",singleProfile,notice).general.ok,false);
 assert.strictEqual(R.normalizeDate("2026.07.16"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("20260716"),"2026-07-16");
 assert.strictEqual(R.normalizeDate("2026-02-30"),"");
+
+// 경쟁률·커트라인 기반 당첨확률 추정
+const probAlloc=R.specialAllocation(10);
+assert.strictEqual(R.specialWinProbability(1,probAlloc,0),null);
+assert.strictEqual(R.specialWinProbability(1,probAlloc,10),.1);
+assert.strictEqual(R.specialWinProbability(3,probAlloc,10),.03);
+const gAlloc=R.generalAllocation(33,59.9667,rates);
+const gwWin=R.generalWinProbability(70,63,gAlloc,0,true);
+assert.strictEqual(gwWin.pPoint,1);assert.strictEqual(gwWin.p,1);
+const gwLottery=R.generalWinProbability(50,63,gAlloc,10,true);
+assert.strictEqual(gwLottery.pPoint,0);
+assert.ok(Math.abs(gwLottery.p-19/330)<1e-9);
+const gwOneHome=R.generalWinProbability(50,0,gAlloc,10,false);
+assert.ok(Math.abs(gwOneHome.p-4/330)<1e-9);
 
 const paymentFixture=[
   "■ 공급금액 및 납부일정 (단위 : 원)",

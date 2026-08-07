@@ -45,6 +45,33 @@
     return {total,stage1,stage2,stage3,firstRate:Number(firstRate),secondRate:Number(secondRate)};
   }
 
+  function clamp01(value){return Math.max(0,Math.min(1,Number(value)||0));}
+  function specialWinProbability(entryStage,allocation,rate){
+    rate=Number(rate)||0;
+    if(rate<=0)return null;
+    const stages=availableSpecialStages(entryStage,allocation);
+    const seats=stages.reduce((total,stage)=>total+integer(allocation[`stage${stage}`]),0);
+    if(!seats)return 0;
+    const applicants=rate*Math.max(1,integer(allocation.total));
+    return clamp01(seats/Math.max(seats,applicants));
+  }
+  function generalWinProbability(points,cutline,allocation,rate,noHome=true){
+    cutline=Number(cutline)||0;rate=Number(rate)||0;
+    const result={pPoint:null,pLottery:null,p:null,basis:[]};
+    if(cutline>0&&integer(allocation.point)>0){
+      result.pPoint=points>=cutline?1:0;
+      result.basis.push(points>=cutline?`가점 ${points}점 ≥ 예상 커트라인 ${cutline}점`:`가점 ${points}점 < 예상 커트라인 ${cutline}점 · 추첨만 가능`);
+    }
+    if(rate>0){
+      const seats=noHome?integer(allocation.lottery):integer(allocation.lotteryRemainder);
+      const applicants=rate*Math.max(1,integer(allocation.total));
+      result.pLottery=seats?clamp01(seats/Math.max(seats,applicants)):0;
+      result.basis.push(`추첨 ${seats}세대 · 예상 경쟁률 ${rate}:1`);
+    }
+    result.p=result.pPoint===1?1:result.pLottery;
+    return result;
+  }
+
   function acquisitionCostEstimate(price,area,options={}){
     price=won(price);area=Number(area)||0;
     const mode=options.mode||"standard";
@@ -687,16 +714,19 @@
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
   }
   function laterDate(...values){return values.map(normalizeDate).filter(Boolean).sort().pop()||"";}
+  function accountTablePoints(years){
+    const months=years*12;
+    return months<6?1:months<12?2:Math.min(17,Math.floor(years)+2);
+  }
   function ownAccountPoints(account,noticeDate){
     if(!normalizeDate(account)||!normalizeDate(noticeDate))return {points:0,years:0,complete:false};
-    const years=yearsBetween(account,noticeDate),months=years*12;
-    const points=months<6?1:months<12?2:Math.min(17,Math.floor(years)+2);
-    return {points,years,complete:true};
+    const years=yearsBetween(account,noticeDate);
+    return {points:accountTablePoints(years),years,complete:true};
   }
   function spouseAccountPoints(account,noticeDate){
     if(!normalizeDate(account)||!normalizeDate(noticeDate))return {points:0,years:0};
     const years=yearsBetween(account,noticeDate);
-    return {points:years<1?1:years<2?2:3,years};
+    return {points:Math.min(3,Math.round(accountTablePoints(years)/2)),years};
   }
   function generalNoHomePoints(person,profile,noticeDate){
     const missing=[];
@@ -825,7 +855,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

@@ -2,9 +2,17 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="가구 프로필을 저장하고 모집공고의 평형별·유형별 실제 물량을 계산하는 청약 전략 계산기">
+  <meta name="theme-color" content="#123c2c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="청약 전략실">
   <title>우리집 청약 전략실</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -20,7 +28,54 @@
   </header>
 
   <main class="shell">
+    <section id="quick" class="panel">
+      <div class="quick-head">
+        <div><span class="kicker">QUICK CHECK</span><h2>3분 간편 진단</h2><p>인적사항과 자금 상황만 넣으면 <b>어떤 유형에 어떤 평형을 넣을지</b> 바로 추천합니다.</p></div>
+        <button id="openAdvanced" class="ghost" type="button">상세 모드 →</button>
+      </div>
+
+      <article class="card quick-card">
+        <h3><span class="quick-step">1</span> 나와 가족</h3>
+        <div class="quick-options">
+          <label><input type="radio" name="quickFamily" value="single" checked><span><b>미혼·자녀 없음</b><small>1인 가구</small></span></label>
+          <label><input type="radio" name="quickFamily" value="married"><span><b>법률혼 부부</b><small>혼인신고 완료</small></span></label>
+          <label><input type="radio" name="quickFamily" value="single_parent"><span><b>미혼·자녀 있음</b><small>한부모 포함</small></span></label>
+        </div>
+        <div class="form-grid quick-grid">
+          <label>내 생년월일<input id="quickBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>내 청약통장 가입일<input id="quickAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label id="quickMarriageField" class="is-hidden">혼인신고일<input id="quickMarriage" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label id="quickAccountBField" class="is-hidden">배우자 통장 가입일<input id="quickAccountB" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+          <label>미성년 자녀 수<input id="quickChildren" type="number" min="0" value="0"></label>
+          <label>임신 중 태아 수<input id="quickFetuses" type="number" min="0" value="0"></label>
+          <label>현재 거주 시·도<input id="quickRegion" value="서울특별시"></label>
+          <label>그 지역 거주 시작일<input id="quickResidence" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
+        </div>
+        <div class="checks">
+          <label><input id="quickNoHome" type="checkbox" checked> 우리 세대 전원 무주택</label>
+          <label><input id="quickNeverHome" type="checkbox" checked> 과거에도 주택 소유 이력 없음</label>
+          <label><input id="quickHead" type="checkbox" checked> 내가 세대주</label>
+        </div>
+      </article>
+
+      <article class="card quick-card">
+        <h3><span class="quick-step">2</span> 소득과 자금</h3>
+        <div class="form-grid quick-grid">
+          <label>내 월소득(세전)<input id="quickIncomeA" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label id="quickIncomeBField" class="is-hidden">배우자 월소득(세전)<input id="quickIncomeB" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+        </div>
+        <p class="hint">소득은 특공 소득단계와 DSR 대출한도 계산에, 현금·저축은 계약금·중도금 납부 가능성 판정에 쓰입니다.</p>
+      </article>
+
+      <button id="quickCalculate" class="primary quick-cta" type="button">이 조건으로 추천 받기</button>
+      <div id="quickResult"></div>
+      <p class="hint quick-notice-hint">현재 공고: <b id="quickNoticeName"></b> · 다른 단지를 보려면 상세 모드의 '모집공고'에서 PDF를 넣으세요. 예치금·재당첨 제한 등 세부 요건은 상세 모드에서 조정합니다.</p>
+    </section>
+
     <nav class="steps" aria-label="계산 단계">
+      <button class="step step-back" id="backToQuick" type="button"><b>←</b><span>간편 진단</span><small>한 화면 요약</small></button>
       <button class="step active" data-panel="profile"><b>1</b><span>나의 프로필</span><small>한 번 저장</small></button>
       <button class="step" data-panel="notice"><b>2</b><span>모집공고</span><small>PDF 분석·검수</small></button>
       <button class="step" data-panel="strategy"><b>3</b><span>물량·전략</span><small>신청 조합 추천</small></button>
@@ -92,8 +147,8 @@
         <div class="form-grid four">
           <label>소득 산정 가구원 수<input id="householdSize" type="number" min="1" value="1"></label>
           <label>가구원 수 자동 제안<select id="householdSizeAuto"><option value="yes">자동 계산</option><option value="no">직접 입력</option></select></label>
-          <label>신청자 A 월소득<input id="aMonthlyIncome" type="number" min="0" step="10000" value="0"><span class="suffix">원</span></label>
-          <label id="bIncomeField">신청자 B 월소득<input id="bMonthlyIncome" type="number" min="0" step="10000" value="0"><span class="suffix">원</span></label>
+          <label>신청자 A 월소득<input id="aMonthlyIncome" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label id="bIncomeField">신청자 B 월소득<input id="bMonthlyIncome" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
         </div>
         <div id="incomeSummary" class="income-summary"></div>
         <p class="hint">입력 월소득은 공고문이 요구하는 전년도 소득자료 기준으로 맞춰야 합니다. 실제 심사에는 세대구성원별 소득자료와 자산요건이 함께 적용됩니다.</p>
@@ -253,6 +308,35 @@
 
       <div id="strategyWarning"></div>
       <div id="recommendation"></div>
+
+      <article class="card expectation-card">
+        <div class="card-head">
+          <div><span class="kicker">MARKET DATA</span><h3>예상 경쟁률·가점 커트라인 <small>(선택 입력)</small></h3><p>입력하면 전략지수 대신 <b>경쟁률 기반 당첨확률 추정</b>으로 전환됩니다. 접수가 끝난 단지는 버튼 한 번으로 실제 경쟁률·커트라인을 채울 수 있습니다.</p></div>
+          <button id="autoApplyData" class="primary" type="button">청약홈 실데이터 자동 적용</button>
+        </div>
+        <div class="table-wrap"><table class="expectation-table">
+          <thead><tr><th>주택형</th><th>일반 예상 커트라인<small>(가점)</small></th><th>일반 예상 경쟁률<small>(대 1)</small></th><th>특공 예상 경쟁률<small>(대 1)</small></th></tr></thead>
+          <tbody id="expectationRows"></tbody>
+        </table></div>
+        <details class="applyhome-panel">
+          <summary>청약홈 실제 경쟁률 불러오기 (공공데이터포털 인증키 필요)</summary>
+          <div class="applyhome-body">
+            <p class="hint">공공데이터포털(data.go.kr)에서 「청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스」를 무료 활용신청하면 발급되는 일반 인증키를 넣으세요(인코딩·디코딩 키 모두 인식, 이 기기에만 저장). 일반 경쟁률·해당지역 최저가점(커트라인)·특공 유형별 신청현황을 한 번에 불러옵니다. 접수 마감된 단지만 데이터가 있으므로, 관심 단지가 접수 전이면 같은 지역 최근 단지의 관리번호로 참고값을 만드세요.</p>
+            <div class="applyhome-controls">
+              <label>인증키<input id="applyhomeKey" type="password" autocomplete="off" placeholder="공공데이터포털 serviceKey"></label>
+              <label>주택관리번호<input id="applyhomeManageNo" inputmode="numeric" placeholder="예: 2026000355 (공고문 공급대상 표)"></label>
+              <button id="applyhomeDirect" class="ghost" type="button">실제 데이터 불러오기</button>
+            </div>
+            <div class="applyhome-controls">
+              <label>단지명 검색 <small>(「청약홈 분양정보 조회 서비스」 별도 신청 시)</small><input id="applyhomeQuery" placeholder="예: 래미안, 힐스테이트 이수"></label>
+              <button id="applyhomeSearch" class="ghost" type="button">단지 검색</button>
+            </div>
+            <div id="applyhomeResults" class="applyhome-results"></div>
+          </div>
+        </details>
+      </article>
+
+      <div id="strategyTips"></div>
 
       <article class="card result-card">
         <div class="card-head"><div><span class="kicker">GENERAL SUPPLY</span><h3>일반공급 실제 물량</h3></div><span class="rounding">소수점 올림 반영</span></div>

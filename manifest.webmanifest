@@ -1,0 +1,12 @@
+{
+  "name": "우리집 청약 전략실",
+  "short_name": "청약 전략실",
+  "description": "가구 프로필 기반 청약 자격·물량·당첨확률·자금 플랜 계산기",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f0",
+  "theme_color": "#123c2c",
+  "icons": [
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}
