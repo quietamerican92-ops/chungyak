@@ -330,3 +330,7 @@ body.simple-mode #quick{display:block}
 .live-list-foot button{border:1px solid var(--line);background:#f7f9f5;color:var(--green);border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900}
 .live-list-foot button:hover{background:#eef4ee}
 .live-list-foot small{font-size:9px;color:var(--muted);line-height:1.5}
+label:has(.suffix) input{padding-right:42px}
+.money-echo{display:block;margin-top:4px;font-size:10px;font-weight:900;color:var(--green)}
+.expectation-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.app-foot{max-width:1240px;margin:0 auto;padding:16px 24px 34px;font-size:10px;color:var(--muted);text-align:center;line-height:1.6}

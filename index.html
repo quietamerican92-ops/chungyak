@@ -28,7 +28,6 @@
         </div>
         <p class="hero-sub">가구 정보는 한 번 저장하고, 모집공고만 바꿔 청약 전략과 자금일정까지 다시 계산합니다.</p>
       </div>
-      <div class="privacy"><span>●</span> PDF와 가족정보는 이 기기 안에서만 처리</div>
     </div>
   </header>
 
@@ -326,7 +325,7 @@
       <article class="card expectation-card">
         <div class="card-head">
           <div><span class="kicker">MARKET DATA</span><h3>예상 경쟁률·가점 커트라인 <small>(선택 입력)</small></h3><p>입력하면 전략지수 대신 <b>경쟁률 기반 당첨확률 추정</b>으로 전환됩니다. 접수가 끝난 단지는 버튼 한 번으로 실제 경쟁률·커트라인을 채울 수 있습니다.</p></div>
-          <button id="autoApplyData" class="primary" type="button">청약홈 실데이터 자동 적용</button>
+          <div class="expectation-actions"><span id="expectationSourceBadge" class="badge ok is-hidden">실제 접수결과 적용됨</span><button id="autoApplyData" class="primary" type="button">청약홈 실데이터 자동 적용</button></div>
         </div>
         <div class="table-wrap"><table class="expectation-table">
           <thead><tr><th>주택형</th><th>일반 예상 커트라인<small>(가점)</small></th><th>일반 예상 경쟁률<small>(대 1)</small></th><th>특공 예상 경쟁률<small>(대 1)</small></th></tr></thead>
@@ -481,6 +480,7 @@
     </section>
   </main>
 
+  <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="./rules.js"></script>
   <script src="./app.js"></script>

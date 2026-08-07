@@ -93,6 +93,7 @@
     target.interimLoanModes=target.interimLoanModes.map(value=>["loan","self","review"].includes(value)?value:"review");
     target.paymentConfidence=num(target.paymentConfidence);
     target.expectations=target.expectations&&typeof target.expectations==="object"&&!Array.isArray(target.expectations)?target.expectations:{};
+    target.expectationsActual=Boolean(target.expectationsActual);
     return target;
   }
   function sizeExpectation(sizeName){
@@ -102,6 +103,7 @@
   function renderExpectations(){
     normalizeNoticeFinance(notice);
     if($("applyhomeManageNo"))$("applyhomeManageNo").value=notice.houseManageNo||"";
+    if($("expectationSourceBadge"))$("expectationSourceBadge").classList.toggle("is-hidden",!notice.expectationsActual);
     $("expectationRows").innerHTML=notice.sizes.length?notice.sizes.map(row=>{
       const exp=sizeExpectation(row.name);
       return `<tr data-exp-size="${esc(row.name)}">
@@ -151,7 +153,22 @@
         const digits=input.value.replace(/\D/g,"");
         input.value=digits?Number(digits).toLocaleString("ko-KR"):"";
       });
+      input.addEventListener("focus",()=>{requestAnimationFrame(()=>input.select())});
       input.addEventListener("blur",()=>{input.value=formatNumberInput(input.value)});
+    });
+  }
+  function attachMoneyEcho(){
+    ["quickIncomeA","quickIncomeB","quickCash","quickSaving"].forEach(id=>{
+      const input=$(id);
+      if(!input||input.dataset.echoBound)return;
+      input.dataset.echoBound="1";
+      const echo=document.createElement("small");
+      echo.className="money-echo";
+      input.closest("label").appendChild(echo);
+      const update=()=>{const value=num(input.value);echo.textContent=value?`= ${formatWonShort(value)}`:""};
+      input.addEventListener("input",update);
+      input.addEventListener("blur",update);
+      update();
     });
   }
   function selectedProfileType(){return document.querySelector('input[name="profileType"]:checked')?.value||"single";}
@@ -470,11 +487,11 @@
           score+=stage===1?16:stage===2?8:0;
           reasons.push(e[type].band.label,`${availableStages.join("·")}단계 실제 물량 ${seats}세대`);
           if(type==="newly"){score+=e.newly.newlyRank===1?10:-6;reasons.push(`신혼부부 ${e.newly.newlyRank}순위`);}
-          if(exp.specialRate>0){winChance=R.specialWinProbability(stage,alloc,exp.specialRate);reasons.push(`특공 예상 경쟁률 ${exp.specialRate}:1 기준 추정`);}
+          if(exp.specialRate>0){winChance=R.specialWinProbability(stage,alloc,exp.specialRate);reasons.push(`특공 ${notice.expectationsActual?"실제":"예상"} 경쟁률 ${exp.specialRate}:1 기준`);}
         }
         if(["agency","multi","elder"].includes(type)&&exp.specialRate>0){
           winChance=Math.max(0,Math.min(1,1/exp.specialRate));
-          reasons.push(`특공 예상 경쟁률 ${exp.specialRate}:1 기준 추정`);
+          reasons.push(`특공 ${notice.expectationsActual?"실제":"예상"} 경쟁률 ${exp.specialRate}:1 기준`);
         }
         if(type==="general"){
           const alloc=R.generalAllocation(supply,size.area,notice.pointRates);
@@ -482,9 +499,10 @@
           score+=(generalScore.points-45)*.45+alloc.lottery*1.4;
           reasons.push(`가점 ${generalScore.points}점${generalScore.complete?"":"(일부 입력 필요)"}`,seatText);
           const gw=R.generalWinProbability(generalScore.points,exp.cutline,alloc,exp.generalRate,profile.noHome);
-          if(gw.p!==null&&gw.p!==undefined){winChance=gw.p;reasons.push(...gw.basis);}
-          else if(gw.pPoint===1){score+=30;reasons.push(...gw.basis);}
-          else if(gw.pPoint===0){score-=20;reasons.push(...gw.basis);}
+          const basis=notice.expectationsActual?gw.basis.map(item=>item.replace(/예상/g,"실제")):gw.basis;
+          if(gw.p!==null&&gw.p!==undefined){winChance=gw.p;reasons.push(...basis);}
+          else if(gw.pPoint===1){score+=30;reasons.push(...basis);}
+          else if(gw.pPoint===0){score-=20;reasons.push(...basis);}
         }
         if(type==="multi"){score+=(multiScore.points-50)*.4;reasons.push(`다자녀 ${multiScore.points}점${multiScore.complete?"":"(일부 입력 필요)"}`)}
         if(mode==="probability"){score-=num(size.area)*.04;reasons.push("당첨기회 우선: 작은 면적에 상대 가중치");}
@@ -513,7 +531,8 @@
   }
   function chanceLabel(row){
     if(row.winChance===null||row.winChance===undefined)return `전략지수 ${row.score.toFixed(1)}`;
-    return row.winChance>=1?"가점 당첨권":`추정 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
+    if(row.winChance>=1)return "가점 당첨권";
+    return `${notice.expectationsActual?"실제 경쟁률 기반":"추정"} 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
   }
   function appLine(label,row){
     return `<div class="application"><div><small>${label}</small><br>${row?esc(R.TYPE_LABELS[row.type]):"미신청"}${row?`<span class="strategy-reason">근거 · ${esc(row.reasons.join(" · "))}</span>`:""}</div><b>${row?`${esc(row.size)}<br><small>${esc(row.seatText)} · ${esc(chanceLabel(row))}</small>`:"—"}</b></div>`;
@@ -856,7 +875,7 @@
   }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
   const APPLYHOME_BASE="https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1";
-  let applyhomeLastRates=[];
+  let applyhomeLastRates=[],applyhomeLastHouse="";
   function applyhomeVal(row,...keys){for(const key of keys){const value=row?.[key];if(value!==undefined&&value!==null&&value!=="")return value}return ""}
   function applyhomeKey(){
     const raw=$("applyhomeKey").value.trim();
@@ -929,6 +948,7 @@
         item.special={supply,requests,rate:supply?Math.round(requests/supply*10)/10:0,parts};
       });
       applyhomeLastRates=[...byType.values()].map(item=>({...item,rate:item.supply?Math.round(item.requests/item.supply*10)/10:0,cutline:item.cutline||item.cutlineEtc}));
+      applyhomeLastHouse=house;
       target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p>`;
       if(options.autoApply&&applyhomeLastRates.length)applyhomeApplyRates();
       return true;
@@ -953,6 +973,7 @@
       if(match.special?.rate>0)exp.specialRate=match.special.rate;
       notice.expectations[size.name]=exp;applied++;
     });
+    notice.expectationsActual=applied>0&&String(applyhomeLastHouse)===String(notice.houseManageNo||"");
     renderExpectations();saveCurrentNotice(false);calculate();
     toast(applied?`${applied}개 주택형에 경쟁률·커트라인을 적용했습니다.`:"전용면적이 일치하는 주택형이 없어 자동 적용하지 못했습니다. 표를 보고 직접 입력해 주세요.");
   }
@@ -1224,6 +1245,8 @@
     const sizeName=input.closest("tr").dataset.expSize,field=input.dataset.expField;
     normalizeNoticeFinance(notice);
     notice.expectations[sizeName]={...notice.expectations[sizeName],[field]:num(input.value)};
+    notice.expectationsActual=false;
+    $("expectationSourceBadge")?.classList.add("is-hidden");
     clearTimeout(expectationTimer);expectationTimer=setTimeout(()=>{saveCurrentNotice(false);calculate()},400);
   });
   $("applyhomeSearch").addEventListener("click",applyhomeSearchProjects);
@@ -1247,6 +1270,11 @@
   $("openAdvanced").addEventListener("click",()=>setUiMode(false));
   $("backToQuick").addEventListener("click",()=>setUiMode(true));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",updateQuickVisibility));
+  let quickSyncTimer;
+  const quickLiveSync=()=>{clearTimeout(quickSyncTimer);quickSyncTimer=setTimeout(()=>{syncQuickToDetail();if($("quickResult").innerHTML){calculate();renderQuickResult()}},500)};
+  QUICK_FIELD_MAP.forEach(([from])=>$(from)?.addEventListener("input",quickLiveSync));
+  ["quickNoHome","quickNeverHome","quickHead"].forEach(id=>$(id)?.addEventListener("change",quickLiveSync));
+  document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",quickLiveSync));
   $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickResult()});
   $("quickResult").addEventListener("click",event=>{
     const button=event.target.closest("[data-quick-go]");
@@ -1282,7 +1310,7 @@ $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderF
   FINANCE_IDS.filter(id=>id!=="planSize").forEach(id=>$(id)?.addEventListener("input",()=>{queueFundingSave();clearTimeout(fundingRenderTimer);fundingRenderTimer=setTimeout(renderFundingPlan,250)}));
   $("calculateFunding").addEventListener("click",renderFundingPlan);
 
-  setupDateInputs();loadProfile();setupMoneyInputs();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
+  setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
   setUiMode((localStorage.getItem(UI_MODE_KEY)||"simple")==="simple");
   loadLiveNotices();
 })();
