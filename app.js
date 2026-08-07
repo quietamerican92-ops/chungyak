@@ -315,14 +315,15 @@
     return output.replace(/\s+/g," ").trim();
   }
 
-  async function extractPdf(file){
-    $("parseStatus").textContent="PDF 분석 도구를 불러오는 중…";
+  async function extractPdf(file,statusEl){
+    statusEl=statusEl||$("parseStatus");
+    statusEl.textContent="PDF 분석 도구를 불러오는 중…";
     const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.min.mjs");
     pdfjs.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
     const pages=pdf.numPages,lines=[];
     for(let pageNo=1;pageNo<=pages;pageNo++){
-      $("parseStatus").textContent=`PDF ${pageNo}/${pages}쪽에서 공급표·분양가·납부일정을 찾는 중…`;
+      statusEl.textContent=`PDF ${pageNo}/${pages}쪽에서 공급표·분양가·납부일정을 찾는 중…`;
       const page=await pdf.getPage(pageNo),viewport=page.getViewport({scale:1}),content=await page.getTextContent(),groups=[];
       content.items.filter(item=>item.str?.trim()).forEach(item=>{
         const transformed=pdfjs.Util.transform(viewport.transform,item.transform);
@@ -749,11 +750,12 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"]];
+  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
     $("quickMarriageField").classList.toggle("is-hidden",!married);
+    $("quickBirthBField").classList.toggle("is-hidden",!married);
     $("quickAccountBField").classList.toggle("is-hidden",!married);
     $("quickIncomeBField").classList.toggle("is-hidden",!married);
   }
@@ -1021,23 +1023,31 @@
     notice={...clone(DEFAULT_NOTICE),id:"notice-"+Date.now(),projectName:"",noticeDate:"",location:"",priorityRegion:"",priorityYears:0,verified:false,sourceFile:"",parseConfidence:0,sizes:[],pricing:[],payments:[],options:[],interimLoanModes:[],interimLoanSource:"",paymentConfidence:0,expectedContractDate:"",expectedMoveInDate:"",expectedMoveInLabel:""};
     $("planPrice").value="";renderNotice();renderFundingPlan();toast("빈 공고를 만들었습니다.");
   });
-  $("pdfFile").addEventListener("change",async event=>{
-    const file=event.target.files[0];if(!file)return;
+  async function importPdf(file,statusEl){
+    if(!file)return;
+    statusEl=statusEl||$("parseStatus");
     try{
-      const extracted=await extractPdf(file);
+      const extracted=await extractPdf(file,statusEl);
       notice=parseAnnouncement(extracted.lines,file.name);$("planPrice").value="";
       renderNotice();
-      if(!notice.sizes.length){
-        $("parseStatus").textContent=`${extracted.pages}쪽을 읽었지만 공급표를 찾지 못했습니다. 표가 이미지이거나 주택형이 가로로 나열된 특수 양식일 수 있습니다. 아래에서 평형·물량을 직접 입력해 주세요.`;
-      }else{
-        $("parseStatus").textContent=`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`;
-      }
+      const message=notice.sizes.length
+        ?`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`
+        :`${extracted.pages}쪽을 읽었지만 공급표를 찾지 못했습니다. 표가 이미지이거나 주택형이 가로로 나열된 특수 양식일 수 있습니다. 상세 모드에서 평형·물량을 직접 입력해 주세요.`;
+      $("parseStatus").textContent=message;
+      $("quickParseStatus").textContent=message;
+      initQuickFromDetail();
+      calculate();
+      if(document.body.classList.contains("simple-mode")&&$("quickResult").innerHTML)renderQuickResult();
       toast("PDF 분석 초안을 만들었습니다.");
     }catch(error){
       console.error(error);
-      $("parseStatus").textContent="PDF 자동 분석에 실패했습니다. 인터넷 연결을 확인하거나 빈 공고에 숫자를 직접 입력해 주세요.";
+      const failure="PDF 자동 분석에 실패했습니다. 인터넷 연결을 확인하거나 상세 모드에서 숫자를 직접 입력해 주세요.";
+      $("parseStatus").textContent=failure;
+      $("quickParseStatus").textContent=failure;
     }
-  });
+  }
+  $("pdfFile").addEventListener("change",event=>{importPdf(event.target.files[0],$("parseStatus"));event.target.value=""});
+  $("quickPdfFile").addEventListener("change",event=>{importPdf(event.target.files[0],$("quickParseStatus"));event.target.value=""});
   $("jsonFile").addEventListener("change",async event=>{
     const file=event.target.files[0];if(!file)return;
     try{
