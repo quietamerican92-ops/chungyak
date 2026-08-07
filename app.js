@@ -14,6 +14,7 @@
   const DEFAULT_NOTICE={
     id:"wolgyesclass-20260716",
     houseManageNo:"2026000355",
+    announceDate:"2026-08-05",
     projectName:"월계 중흥S-클래스 리비에르",
     noticeDate:"2026-07-16",
     location:"서울특별시 노원구",
@@ -75,6 +76,8 @@
   let activeId=localStorage.getItem(ACTIVE_KEY)||DEFAULT_NOTICE.id;
   let notice=clone(notices[activeId]||DEFAULT_NOTICE);
   if(notice.id===DEFAULT_NOTICE.id&&!notice.houseManageNo)notice.houseManageNo=DEFAULT_NOTICE.houseManageNo;
+  if(notice.id===DEFAULT_NOTICE.id&&!notice.announceDate)notice.announceDate=DEFAULT_NOTICE.announceDate;
+  Object.values(notices).forEach(item=>{if(item.id===DEFAULT_NOTICE.id){if(!item.houseManageNo)item.houseManageNo=DEFAULT_NOTICE.houseManageNo;if(!item.announceDate)item.announceDate=DEFAULT_NOTICE.announceDate}});
   let saveTimer,financeSaveTimer;
 
   function readStorage(key,fallback){
@@ -236,6 +239,7 @@
 
   function refreshLibrary(){
     $("noticeLibrary").innerHTML=Object.values(notices).sort((a,b)=>String(b.noticeDate).localeCompare(String(a.noticeDate))).map(n=>`<option value="${esc(n.id)}"${n.id===notice.id?" selected":""}>${esc(n.projectName||"이름 없는 공고")} · ${esc(n.noticeDate||"날짜 없음")}</option>`).join("");
+    renderCompareChoices();
   }
   function saveCurrentNotice(showToast=true){
     if(!notice.id)notice.id="notice-"+Date.now();
@@ -370,8 +374,9 @@
     const manageRow=text.match(/\b(20\d{8})\b\s+\d{2}\s+0?\d{2,3}\.\d{2,4}/);
     const manageContext=text.match(/주택\s*관리\s*번호[\s\S]{0,2500}?\b(20\d{8})\b/);
     const manageFile=fileName.match(/\b(20\d{8})\b/);
+    const announceMatch=text.match(/당첨자\s*발표[^0-9]{0,40}?(20\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
     return {
-      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow?.[1]||manageContext?.[1]||manageFile?.[1]||"",
+      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow?.[1]||manageContext?.[1]||manageFile?.[1]||"",announceDate:announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):"",
       housingType:isPrivate?"private":/국민주택|공공주택/.test(text)?"public":"unsupported",
       priorityRegion,priorityYears:yearMatch?num(yearMatch[1]):0,specialMonths:monthReqs.length?Math.min(...monthReqs):6,
       generalMonths:monthReqs.length?Math.max(...monthReqs):24,generalHeadRequired:overheated||adjusted?"yes":"no",pointRates:rates,verified:false,
@@ -951,6 +956,154 @@
     renderExpectations();saveCurrentNotice(false);calculate();
     toast(applied?`${applied}개 주택형에 경쟁률·커트라인을 적용했습니다.`:"전용면적이 일치하는 주택형이 없어 자동 적용하지 못했습니다. 표를 보고 직접 입력해 주세요.");
   }
+  const APPLYHOME_DETAIL_BASE="https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1";
+  const LIVE_CACHE_KEY="subscription_live_notices_v3";
+  let liveNotices=[],liveIndex=0,liveTimer=null;
+  function todayStr(){const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`}
+  function addDaysStr(days){const n=new Date();n.setDate(n.getDate()+days);return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`}
+  function liveStatus(row){
+    const today=todayStr();
+    if(row.start&&row.end){
+      if(today<row.start)return {label:`접수예정 ${row.start.slice(5).replace("-",".")}`,cls:"soon"};
+      if(today<=row.end)return {label:"접수중",cls:"open"};
+    }
+    return {label:`접수마감${row.announce?` · 발표 ${row.announce.slice(5).replace("-",".")}`:""}`,cls:"closed"};
+  }
+  function startLiveRotation(){
+    clearInterval(liveTimer);
+    if(!liveNotices.length)return;
+    const render=()=>{
+      const row=liveNotices[liveIndex%liveNotices.length];
+      const status=liveStatus(row);
+      $("liveBannerText").textContent=`[${row.area}] ${row.name} · ${status.label}`;
+      $("liveBannerMain").dataset.house=row.no;
+    };
+    render();
+    liveTimer=setInterval(()=>{if($("liveBannerList").classList.contains("is-hidden")){liveIndex++;render()}},2000);
+  }
+  async function loadLiveNotices(){
+    const key=applyhomeKey();
+    if(!key){$("liveBannerText").textContent="공공데이터포털 키를 등록하면 서울·경기 실시간 공고가 표시됩니다 (탭하여 등록)";$("liveBannerMain").dataset.house="";return}
+    const today=todayStr();
+    const cached=readStorage(LIVE_CACHE_KEY,null);
+    if(cached&&cached.date===today&&Array.isArray(cached.rows)&&cached.rows.length){liveNotices=cached.rows;startLiveRotation();return}
+    try{
+      const since=addDaysStr(-80);
+      const fetchArea=area=>applyhomeGet(`${APPLYHOME_DETAIL_BASE}/getAPTLttotPblancDetail?page=1&perPage=100&serviceKey=${encodeURIComponent(key)}&cond%5BSUBSCRPT_AREA_CODE_NM%3A%3AEQ%5D=${encodeURIComponent(area)}&cond%5BRCRIT_PBLANC_DE%3A%3AGTE%5D=${since}`).then(data=>data.data||[]);
+      const [seoul,gyeonggi]=await Promise.all([fetchArea("서울"),fetchArea("경기")]);
+      const statusOrder={open:0,soon:1,closed:2};
+      liveNotices=[...seoul,...gyeonggi].map(row=>({no:String(applyhomeVal(row,"HOUSE_MANAGE_NO")),name:String(applyhomeVal(row,"HOUSE_NM")),area:String(applyhomeVal(row,"SUBSCRPT_AREA_CODE_NM")),notice:String(applyhomeVal(row,"RCRIT_PBLANC_DE")),start:String(applyhomeVal(row,"RCEPT_BGNDE")),end:String(applyhomeVal(row,"RCEPT_ENDDE")),announce:String(applyhomeVal(row,"PRZWNER_PRESNATN_DE"))}))
+        .filter(row=>row.no&&(row.end>=today||row.notice>=addDaysStr(-35)))
+        .sort((a,b)=>statusOrder[liveStatus(a).cls]-statusOrder[liveStatus(b).cls]||String(a.end).localeCompare(String(b.end)));
+      localStorage.setItem(LIVE_CACHE_KEY,JSON.stringify({date:today,rows:liveNotices}));
+      if(liveNotices.length)startLiveRotation();
+      else $("liveBannerText").textContent="현재 서울·경기에 진행 중인 모집공고가 없습니다";
+    }catch(error){$("liveBannerText").textContent="실시간 공고 조회 실패 — 인증키와 트래픽을 확인하세요"}
+  }
+  function renderLiveList(){
+    $("liveBannerList").innerHTML=liveNotices.length?liveNotices.map(row=>{
+      const status=liveStatus(row);
+      return `<button type="button" class="live-item" data-live-house="${esc(row.no)}"><span class="live-status ${status.cls}">${esc(status.label)}</span><b>${esc(row.name)}</b><small>${esc(row.area)} · 공고 ${esc(row.notice)}${row.announce?` · 발표 ${esc(row.announce)}`:""}</small></button>`;
+    }).join(""):`<div class="live-empty">표시할 공고가 없습니다. 인증키 등록 후 새로고침해 주세요.</div>`;
+  }
+  async function applyRemoteNotice(house){
+    const key=applyhomeKey();
+    if(!key||!house)return;
+    toast("청약홈에서 공고 정보를 불러오는 중…");
+    try{
+      const cond=`&cond%5BHOUSE_MANAGE_NO%3A%3AEQ%5D=${encodeURIComponent(house)}`;
+      const [detailData,mdlData]=await Promise.all([
+        applyhomeGet(`${APPLYHOME_DETAIL_BASE}/getAPTLttotPblancDetail?page=1&perPage=3&serviceKey=${encodeURIComponent(key)}${cond}`),
+        applyhomeGet(`${APPLYHOME_DETAIL_BASE}/getAPTLttotPblancMdl?page=1&perPage=50&serviceKey=${encodeURIComponent(key)}${cond}`)
+      ]);
+      const detail=(detailData.data||[])[0],mdl=mdlData.data||[];
+      if(!detail||!mdl.length){toast("공고 상세를 불러오지 못했습니다. PDF 업로드를 이용해 주세요.");return}
+      const typeName=raw=>{const match=String(raw).trim().match(/^0*(\d+)\.\d+\s*([A-Z]*)$/);return match?String(Number(match[1]))+(match[2]||""):String(raw).trim()};
+      const sizes=mdl.map(m=>{
+        const general=num(m.SUPLY_HSHLDCO),special=num(m.SPSPLY_HSHLDCO);
+        return {name:typeName(m.HOUSE_TY),area:parseFloat(String(m.HOUSE_TY).trim())||num(m.SUPLY_AR)||0,total:general+special,agency:num(m.INSTT_RECOMEND_HSHLDCO),multi:num(m.MNYCH_HSHLDCO),newly:num(m.NWWDS_HSHLDCO),elder:num(m.OLD_PARNTS_SUPORT_HSHLDCO),first:num(m.LFE_FRST_HSHLDCO),baby:num(m.NWBB_HSHLDCO),general};
+      });
+      const pricing=mdl.map(m=>({size:typeName(m.HOUSE_TY),min:num(m.LTTOT_TOP_AMOUNT)*10000,max:num(m.LTTOT_TOP_AMOUNT)*10000,options:[]}));
+      const contractDate=R.normalizeDate(applyhomeVal(detail,"CNTRCT_CNCLS_BGNDE"));
+      const moveInRaw=String(applyhomeVal(detail,"MVN_PREARNGE_YM"));
+      const moveInDate=moveInRaw.length===6?`${moveInRaw.slice(0,4)}-${moveInRaw.slice(4)}-01`:"";
+      const interimDates=[];
+      if(contractDate&&moveInDate){
+        const startMs=new Date(contractDate+"T00:00:00").getTime()+90*86400000;
+        const endMs=new Date(moveInDate+"T00:00:00").getTime()-90*86400000;
+        if(endMs>startMs)for(let index=0;index<6;index++){const t=new Date(startMs+(endMs-startMs)*index/5);interimDates.push(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`)}
+      }
+      const payments=[{kind:"contract",label:"계약금",rate:10,dueDate:"",dueLabel:"계약 시"},...Array.from({length:6},(_,index)=>({kind:"interim",label:`중도금 ${index+1}차`,rate:10,dueDate:interimDates[index]||"",dueLabel:interimDates[index]?"":"공고문 확인"})),{kind:"balance",label:"잔금",rate:30,dueDate:"",dueLabel:"입주 지정일"}];
+      const overheated=String(applyhomeVal(detail,"SPECLT_RDN_EARTH_AT")).toUpperCase()==="Y";
+      const adjusted=String(applyhomeVal(detail,"MDAT_TRGET_AREA_SECD")).toUpperCase().startsWith("Y");
+      const areaName=String(applyhomeVal(detail,"SUBSCRPT_AREA_CODE_NM"));
+      const existingId=Object.values(notices).find(item=>String(item.houseManageNo)===String(house))?.id;
+      notice={
+        id:existingId||"applyhome-"+house,houseManageNo:String(house),projectName:String(applyhomeVal(detail,"HOUSE_NM")),
+        noticeDate:R.normalizeDate(applyhomeVal(detail,"RCRIT_PBLANC_DE")),location:String(applyhomeVal(detail,"HSSPLY_ADRES")),
+        announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
+        housingType:"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:2,
+        specialMonths:6,generalMonths:24,generalHeadRequired:overheated||adjusted?"yes":"no",
+        pointRates:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
+        verified:false,sourceFile:"청약홈 API 자동 구성",parseConfidence:70,
+        sizes,pricing,payments,options:[],interimLoanModes:payments.filter(row=>row.kind==="interim").map(()=>"review"),
+        interimLoanSource:"납부일정·중도금 대출은 표준(10/60/30) 가정 — 공고문 PDF 검수 권장",paymentConfidence:40,
+        expectedContractDate:contractDate,expectedMoveInDate:moveInDate,expectedMoveInLabel:moveInRaw.length===6?`${moveInRaw.slice(0,4)}년 ${moveInRaw.slice(4)}월 예정`:"",expectations:{}
+      };
+      $("planPrice").value="";
+      saveCurrentNotice(false);renderNotice();initQuickFromDetail();calculate();
+      $("liveBannerList").classList.add("is-hidden");
+      if(document.body.classList.contains("simple-mode")){setPanel("quick");if($("quickResult").innerHTML)renderQuickResult()}
+      toast(`'${notice.projectName}' 공고를 적용했습니다. 물량·분양가는 청약홈 기준, 납부일정은 표준 가정입니다.`);
+    }catch(error){console.error(error);toast("공고 적용 실패: "+error.message)}
+  }
+  function withNotice(target,fn){
+    const saved=notice;
+    notice=normalizeNoticeFinance(clone(target));
+    try{return fn()}finally{notice=saved}
+  }
+  function renderCompareChoices(){
+    if(!$("compareChoices"))return;
+    const list=Object.values(notices).sort((a,b)=>String(b.noticeDate).localeCompare(String(a.noticeDate)));
+    $("compareChoices").innerHTML=list.length>=2?list.map(item=>`<label class="compare-choice"><input type="checkbox" data-compare-id="${esc(item.id)}"${item.id===notice.id?" checked":""}><span><b>${esc(item.projectName||"이름 없음")}</b><small>공고 ${esc(item.noticeDate||"-")} · 발표 ${esc(item.announceDate||"미확인")}</small></span></label>`).join(""):`<p class="muted">비교하려면 공고가 2개 이상 필요합니다. 상단 실시간 배너를 탭하거나 PDF를 올려 공고를 불러오면 자동으로 저장 목록에 쌓입니다.</p>`;
+  }
+  function evaluateNoticeForCompare(target){
+    return withNotice(target,()=>{
+      const profile=profileData();
+      const aRows=candidateRows("a",profile),bRows=R.hasSecondApplicant(profile)?candidateRows("b",profile):[];
+      const plans=buildPlans(aRows,bRows,profile);
+      const rank=rows=>rows.filter(Boolean).sort((x,y)=>((y.winChance??y.score/300))-((x.winChance??x.score/300)))[0]||null;
+      const best=rank([plans.a.special,plans.a.general]);
+      const bBest=plans.useB?rank([plans.b.special,plans.b.general]):null;
+      const funding=best?quickFundingCheck(best.size):null;
+      const metric=best?(best.winChance!==null&&best.winChance!==undefined?best.winChance:best.score/300):-1;
+      return {id:target.id,name:target.projectName||"이름 없음",announce:target.announceDate||"",best,bBest,funding,metric,verified:target.verified};
+    });
+  }
+  function runCompare(){
+    const ids=[...document.querySelectorAll("[data-compare-id]:checked")].map(input=>input.dataset.compareId).slice(0,4);
+    if(ids.length<2){$("compareResult").innerHTML="<p class='muted'>2개 이상 선택해 주세요.</p>";return}
+    const results=ids.map(id=>evaluateNoticeForCompare(notices[id])).sort((a,b)=>b.metric-a.metric);
+    const knownAnnounce=results.filter(row=>row.announce);
+    const sameAnnounce=knownAnnounce.length===results.length&&new Set(results.map(row=>row.announce)).size===1;
+    const married=R.hasSecondApplicant(profileData())&&$("bothApply").checked;
+    const rowsHtml=results.map((row,index)=>{
+      const pickText=row.best?`${R.TYPE_LABELS[row.best.type]} · ${row.best.size} (${chanceLabel(row.best)})`:"신청 가능 유형 없음";
+      const fundText=!row.funding?"분양가·일정 미확인":row.funding.loanShortage>0?`부족 ${formatWonShort(row.funding.loanShortage)}`:row.funding.firstShortage?`중간 공백 ${formatWonShort(row.funding.firstShortage.shortage)}`:`가능 · 여유 ${formatWonShort(row.funding.finalSurplus)}`;
+      const fundCls=!row.funding?"warn":row.funding.loanShortage>0?"bad":row.funding.firstShortage?"warn":"ok";
+      return `<tr class="${index===0?"compare-winner":""}"><td>${index===0?"🏆 ":""}<b>${esc(row.name)}</b>${row.verified?"":"<br><small class='muted'>미검수</small>"}</td><td>${esc(row.announce||"미확인")}</td><td>${esc(pickText)}</td><td><span class="compare-fund ${fundCls}">${esc(fundText)}</span></td></tr>`;
+    }).join("");
+    let verdict="";
+    if(knownAnnounce.length<results.length)verdict+=`일부 단지의 발표일이 미확인이라 규정 판정이 불완전합니다(공고 화면에서 발표일 입력 가능). `;
+    if(sameAnnounce){
+      const first=results[0],second=results[1];
+      verdict+=`이 단지들은 당첨자 발표일(${esc(first.announce)})이 같아 <b>1인은 한 단지에만 신청</b>할 수 있습니다(같은 단지 내 특공+일반 각 1건은 예외, 위반 시 모두 무효). `;
+      verdict+=married&&second?`추천 배분 — <b>나는 ${esc(first.name)}</b>${first.best?` (${esc(R.TYPE_LABELS[first.best.type])} ${esc(first.best.size)})`:""}, <b>배우자는 ${esc(second.name)}</b>${(second.bBest||second.best)?` (${esc(R.TYPE_LABELS[(second.bBest||second.best).type])} ${esc((second.bBest||second.best).size)})`:""}. 부부는 각자 1건씩 가능하므로 두 단지를 나눠 커버하고, 중복당첨 시 접수일시가 빠른 건이 유효하니 첫날 이른 시간에 접수하세요.`:`추천 — <b>${esc(first.name)}</b> 한 곳에 집중하세요.`;
+    }else{
+      verdict+=`발표일이 서로 달라 전부 신청할 수 있습니다. 단 <b>발표일이 빠른 단지에 당첨되면 늦은 단지의 당첨은 자동 취소</b>되므로, 더 원하는 단지의 발표가 늦다면 앞 단지는 '당첨돼도 계약할 단지'인지 확인 후 넣으세요. 종합 우선순위: ${results.map((row,index)=>`<b>${index+1}. ${esc(row.name)}</b>`).join(" → ")}`;
+    }
+    $("compareResult").innerHTML=`<div class="compare-verdict">${verdict}</div><div class="table-wrap"><table><thead><tr><th>단지</th><th>당첨자 발표일</th><th>내 최선 신청</th><th>자금 판정</th></tr></thead><tbody>${rowsHtml}</tbody></table><p class="hint">순위 = 당첨확률(경쟁률·커트라인 입력 시) 또는 전략지수 기준. 규정 근거: 주택공급규칙 — 동일 발표일 주택 1인 1건, 부부 각자 신청 가능, 부부 중복당첨 시 접수 빠른 건 유효.</p>`;
+  }
   function calculate(){
     renderProfileSummary();saveProfile();
     const profile=profileData();
@@ -1090,6 +1243,21 @@
     const button=event.target.closest("[data-quick-go]");
     if(button)setUiMode(false,button.dataset.quickGo);
   });
+  $("liveBannerToggle").addEventListener("click",()=>{
+    const list=$("liveBannerList");
+    if(list.classList.contains("is-hidden")){renderLiveList();list.classList.remove("is-hidden");$("liveBannerToggle").textContent="▴"}
+    else{list.classList.add("is-hidden");$("liveBannerToggle").textContent="▾"}
+  });
+  $("liveBannerMain").addEventListener("click",()=>{
+    const house=$("liveBannerMain").dataset.house;
+    if(house)applyRemoteNotice(house);
+    else{setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus()}
+  });
+  $("liveBannerList").addEventListener("click",event=>{
+    const item=event.target.closest("[data-live-house]");
+    if(item)applyRemoteNotice(item.dataset.liveHouse);
+  });
+  $("runCompare").addEventListener("click",runCompare);
 $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});
   $("optionChoices").addEventListener("change",event=>{if(!event.target.matches("[data-option-id]"))return;updateOptionSummary();saveFundingInputs();renderFundingPlan()});
   $("interimFundingChoices").addEventListener("change",event=>{if(!event.target.matches("[data-interim-mode]"))return;saveFundingInputs();renderFundingPlan()});
@@ -1099,4 +1267,5 @@ $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderF
 
   setupDateInputs();loadProfile();setupMoneyInputs();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
   setUiMode((localStorage.getItem(UI_MODE_KEY)||"simple")==="simple");
+  loadLiveNotices();
 })();
