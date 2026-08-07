@@ -93,9 +93,11 @@
     target.interimLoanModes=target.interimLoanModes.map(value=>["loan","self","review"].includes(value)?value:"review");
     target.paymentConfidence=num(target.paymentConfidence);
     target.expectations=target.expectations&&typeof target.expectations==="object"&&!Array.isArray(target.expectations)?target.expectations:{};
-    target.expectationsActual=Boolean(target.expectationsActual);
+    target.expectationsSource=["actual","model"].includes(target.expectationsSource)?target.expectationsSource:(target.expectationsActual?"actual":"");
+    delete target.expectationsActual;
     return target;
   }
+  function expectationSourceLabel(){return notice.expectationsSource==="actual"?"실제":notice.expectationsSource==="model"?"과거데이터":"예상"}
   function sizeExpectation(sizeName){
     const raw=notice.expectations?.[sizeName]||{};
     return {cutline:num(raw.cutline),generalRate:num(raw.generalRate),specialRate:num(raw.specialRate)};
@@ -103,7 +105,13 @@
   function renderExpectations(){
     normalizeNoticeFinance(notice);
     if($("applyhomeManageNo"))$("applyhomeManageNo").value=notice.houseManageNo||"";
-    if($("expectationSourceBadge"))$("expectationSourceBadge").classList.toggle("is-hidden",!notice.expectationsActual);
+    const badge=$("expectationSourceBadge");
+    if(badge){
+      const source=notice.expectationsSource;
+      badge.classList.toggle("is-hidden",!source);
+      if(source){badge.textContent=source==="actual"?"실제 접수결과 적용됨":"과거 유사단지 추정 적용";badge.className="badge "+(source==="actual"?"ok":"warn")}
+      if(source!=="model"&&$("modelNote"))$("modelNote").innerHTML="";
+    }
     $("expectationRows").innerHTML=notice.sizes.length?notice.sizes.map(row=>{
       const exp=sizeExpectation(row.name);
       return `<tr data-exp-size="${esc(row.name)}">
@@ -487,11 +495,11 @@
           score+=stage===1?16:stage===2?8:0;
           reasons.push(e[type].band.label,`${availableStages.join("·")}단계 실제 물량 ${seats}세대`);
           if(type==="newly"){score+=e.newly.newlyRank===1?10:-6;reasons.push(`신혼부부 ${e.newly.newlyRank}순위`);}
-          if(exp.specialRate>0){winChance=R.specialWinProbability(stage,alloc,exp.specialRate);reasons.push(`특공 ${notice.expectationsActual?"실제":"예상"} 경쟁률 ${exp.specialRate}:1 기준`);}
+          if(exp.specialRate>0){winChance=R.specialWinProbability(stage,alloc,exp.specialRate);reasons.push(`특공 ${expectationSourceLabel()} 경쟁률 ${exp.specialRate}:1 기준`);}
         }
         if(["agency","multi","elder"].includes(type)&&exp.specialRate>0){
           winChance=Math.max(0,Math.min(1,1/exp.specialRate));
-          reasons.push(`특공 ${notice.expectationsActual?"실제":"예상"} 경쟁률 ${exp.specialRate}:1 기준`);
+          reasons.push(`특공 ${expectationSourceLabel()} 경쟁률 ${exp.specialRate}:1 기준`);
         }
         if(type==="general"){
           const alloc=R.generalAllocation(supply,size.area,notice.pointRates);
@@ -499,7 +507,7 @@
           score+=(generalScore.points-45)*.45+alloc.lottery*1.4;
           reasons.push(`가점 ${generalScore.points}점${generalScore.complete?"":"(일부 입력 필요)"}`,seatText);
           const gw=R.generalWinProbability(generalScore.points,exp.cutline,alloc,exp.generalRate,profile.noHome);
-          const basis=notice.expectationsActual?gw.basis.map(item=>item.replace(/예상/g,"실제")):gw.basis;
+          const basis=notice.expectationsSource?gw.basis.map(item=>item.replace(/예상/g,expectationSourceLabel())):gw.basis;
           if(gw.p!==null&&gw.p!==undefined){winChance=gw.p;reasons.push(...basis);}
           else if(gw.pPoint===1){score+=30;reasons.push(...basis);}
           else if(gw.pPoint===0){score-=20;reasons.push(...basis);}
@@ -532,7 +540,8 @@
   function chanceLabel(row){
     if(row.winChance===null||row.winChance===undefined)return `전략지수 ${row.score.toFixed(1)}`;
     if(row.winChance>=1)return "가점 당첨권";
-    return `${notice.expectationsActual?"실제 경쟁률 기반":"추정"} 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
+    const source=notice.expectationsSource==="actual"?"실제 경쟁률 기반":notice.expectationsSource==="model"?"과거데이터 추정":"추정";
+    return `${source} 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
   }
   function appLine(label,row){
     return `<div class="application"><div><small>${label}</small><br>${row?esc(R.TYPE_LABELS[row.type]):"미신청"}${row?`<span class="strategy-reason">근거 · ${esc(row.reasons.join(" · "))}</span>`:""}</div><b>${row?`${esc(row.size)}<br><small>${esc(row.seatText)} · ${esc(chanceLabel(row))}</small>`:"—"}</b></div>`;
@@ -973,7 +982,7 @@
       if(match.special?.rate>0)exp.specialRate=match.special.rate;
       notice.expectations[size.name]=exp;applied++;
     });
-    notice.expectationsActual=applied>0&&String(applyhomeLastHouse)===String(notice.houseManageNo||"");
+    notice.expectationsSource=applied>0&&String(applyhomeLastHouse)===String(notice.houseManageNo||"")?"actual":"";
     renderExpectations();saveCurrentNotice(false);calculate();
     toast(applied?`${applied}개 주택형에 경쟁률·커트라인을 적용했습니다.`:"전용면적이 일치하는 주택형이 없어 자동 적용하지 못했습니다. 표를 보고 직접 입력해 주세요.");
   }
@@ -1075,9 +1084,53 @@
       $("planPrice").value="";
       saveCurrentNotice(false);renderNotice();initQuickFromDetail();calculate();
       $("liveBannerList").classList.add("is-hidden");
+      applyModelPrediction(true);
       if(document.body.classList.contains("simple-mode")){setPanel("quick");if($("quickResult").innerHTML)renderQuickResult()}
-      toast(`'${notice.projectName}' 공고를 적용했습니다. 물량·분양가는 청약홈 기준, 납부일정은 표준 가정입니다.`);
+      toast(`'${notice.projectName}' 공고를 적용했습니다. 물량·분양가는 청약홈 기준, 납부일정은 표준 가정, 경쟁률은 과거 유사단지 추정입니다.`);
     }catch(error){console.error(error);toast("공고 적용 실패: "+error.message)}
+  }
+  function noticeSido(){
+    const value=String(notice.priorityRegion||notice.location||"");
+    return /서울/.test(value)?"서울":/인천/.test(value)?"인천":/경기/.test(value)?"경기":"";
+  }
+  function noticeGu(){
+    const match=String(notice.location||"").match(/(?:서울|경기|인천)[^\s]*\s+([가-힣]+[시군구])/);
+    return match?match[1]:"";
+  }
+  function modelSegmentFor(area){
+    const M=window.SubscriptionModel;
+    const sido=noticeSido();
+    if(!M||!sido)return null;
+    const gu=noticeGu();
+    const band=area<=60?"s":area<=85?"m":"l";
+    const tries=[["gu_band",[sido,gu,band]],["gu",[sido,gu]],["sido_band",[sido,band]],["sido",[sido]]];
+    for(const [name,parts] of tries){
+      if(name.startsWith("gu")&&!gu)continue;
+      const seg=M.segments[`${name}::${parts.join("|")}`];
+      if(seg)return {...seg,level:name,sido,gu,band};
+    }
+    return null;
+  }
+  function applyModelPrediction(auto=false){
+    normalizeNoticeFinance(notice);
+    if(notice.expectationsSource==="actual"){if(!auto)toast("이미 실제 접수결과가 적용되어 있어 예측으로 덮지 않습니다.");return false}
+    let applied=0;
+    const lines=[];
+    notice.sizes.forEach(size=>{
+      const seg=modelSegmentFor(num(size.area));
+      if(!seg)return;
+      const exp={...notice.expectations[size.name]};
+      if(!exp.generalRate&&seg.r50>0){exp.generalRate=seg.r50;applied++}
+      if(!exp.cutline&&seg.c50){exp.cutline=seg.c50;applied++}
+      notice.expectations[size.name]=exp;
+      lines.push(`${size.name} — 일반 ${seg.r25}~${seg.r75}:1 (중앙 ${seg.r50})${seg.c50?` · 커트라인 ${seg.c25}~${seg.c75}점 (중앙 ${seg.c50})`:""} · ${seg.level.startsWith("gu")?seg.gu:seg.sido} 유사사례 ${seg.n}건`);
+    });
+    if(!applied){if(!auto)toast("채울 값이 없습니다. 이미 입력돼 있거나 이 지역의 과거 데이터가 부족합니다.");return false}
+    notice.expectationsSource="model";
+    $("modelNote").innerHTML=`<b>과거 유사단지 분포 (수도권 2021.01~2026.08 · 838단지)</b><br>${lines.map(esc).join("<br>")}<br><small>시간 홀드아웃 검증: 실측의 39%만 위 25~75% 범위 안, 63%가 그 2.2배 확장범위 안이었습니다. 개별 단지의 입지·분양가 매력에 따라 크게 벗어날 수 있는 참고 범위입니다.</small>`;
+    renderExpectations();saveCurrentNotice(false);calculate();
+    if(!auto)toast("과거 데이터 기반 예측을 채웠습니다.");
+    return true;
   }
   function withNotice(target,fn){
     const saved=notice;
@@ -1212,6 +1265,7 @@
       $("quickParseStatus").textContent=message;
       initQuickFromDetail();
       calculate();
+      applyModelPrediction(true);
       if(document.body.classList.contains("simple-mode")&&$("quickResult").innerHTML)renderQuickResult();
       toast("PDF 분석 초안을 만들었습니다.");
     }catch(error){
@@ -1245,7 +1299,7 @@
     const sizeName=input.closest("tr").dataset.expSize,field=input.dataset.expField;
     normalizeNoticeFinance(notice);
     notice.expectations[sizeName]={...notice.expectations[sizeName],[field]:num(input.value)};
-    notice.expectationsActual=false;
+    notice.expectationsSource="";
     $("expectationSourceBadge")?.classList.add("is-hidden");
     clearTimeout(expectationTimer);expectationTimer=setTimeout(()=>{saveCurrentNotice(false);calculate()},400);
   });
@@ -1303,6 +1357,7 @@
     if(item)applyRemoteNotice(item.dataset.liveHouse);
   });
   $("runCompare").addEventListener("click",runCompare);
+  $("modelFill").addEventListener("click",()=>applyModelPrediction(false));
 $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});
   $("optionChoices").addEventListener("change",event=>{if(!event.target.matches("[data-option-id]"))return;updateOptionSummary();saveFundingInputs();renderFundingPlan()});
   $("interimFundingChoices").addEventListener("change",event=>{if(!event.target.matches("[data-interim-mode]"))return;saveFundingInputs();renderFundingPlan()});

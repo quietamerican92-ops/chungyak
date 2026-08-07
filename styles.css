@@ -334,3 +334,6 @@ label:has(.suffix) input{padding-right:42px}
 .money-echo{display:block;margin-top:4px;font-size:10px;font-weight:900;color:var(--green)}
 .expectation-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .app-foot{max-width:1240px;margin:0 auto;padding:16px 24px 34px;font-size:10px;color:var(--muted);text-align:center;line-height:1.6}
+.model-note{margin-top:11px;padding:12px 14px;border:1px solid #e3d9bd;border-radius:12px;background:#fdf9ee;color:#5c5233;font-size:11px;line-height:1.7}
+.model-note:empty{display:none}
+.model-note small{color:#8a7d55;font-size:9px}
