@@ -132,6 +132,16 @@
     window.scrollTo({top:0,behavior:"smooth"});
   }
 
+  function wrapSuffixInputs(){
+    document.querySelectorAll("label > .suffix").forEach(suffix=>{
+      const input=suffix.previousElementSibling;
+      if(!input||!/^(INPUT|SELECT)$/.test(input.tagName)||input.closest(".input-wrap"))return;
+      const wrap=document.createElement("span");
+      wrap.className="input-wrap";
+      input.parentNode.insertBefore(wrap,input);
+      wrap.appendChild(input);wrap.appendChild(suffix);
+    });
+  }
   function setupDateInputs(){
     document.querySelectorAll(".manual-date").forEach(input=>{
       if(input.closest(".date-control"))return;
@@ -652,6 +662,10 @@
     const selected=rows.find(row=>row.size===$("planSize").value)||rows[0];
     if(resetPrice||!num($("planPrice").value))$("planPrice").value=formatNumberInput(selected?.max);
     if(resetPrice||!num($("collateralValue").value))$("collateralValue").value=formatNumberInput(selected?.max);
+    $("priceChips").innerHTML=selected&&num(selected.max)?[
+      num(selected.min)&&num(selected.min)!==num(selected.max)?`<button type="button" class="price-chip" data-price="${num(selected.min)}">최저가 ${formatWonShort(selected.min)}</button>`:"",
+      `<button type="button" class="price-chip" data-price="${num(selected.max)}">최고가 ${formatWonShort(selected.max)}</button>`
+    ].filter(Boolean).join(""):"";
     if(!$("contractDate").value&&notice.expectedContractDate)$("contractDate").value=notice.expectedContractDate;
     if(!$("moveInDate").value&&notice.expectedMoveInDate)$("moveInDate").value=notice.expectedMoveInDate;
     setupDateInputs();setupMoneyInputs($("finance"));renderOptionChoices();renderInterimFundingChoices();
@@ -718,15 +732,24 @@
   }
   function phaseLabel(kind){return kind==="contract"?"계약":kind==="interim"?"중도금":"잔금·입주"}
   function renderFundingPhases(plan){
-    const definitions=[{kind:"contract",step:"01",copy:"당첨 직후 현금"},{kind:"interim",step:"02",copy:"공사기간 분할납부"},{kind:"balance",step:"03",copy:"대출 정산·세금"}];
-    $("fundingPhases").innerHTML=definitions.map(definition=>{
-      const rows=plan.rows.filter(row=>(row.phaseKind||row.kind)===definition.kind);
-      const own=sum(rows,"own"),loan=sum(rows,"financing"),source=own+loan;
-      const ownWidth=source?Math.max(0,Math.min(100,own/source*100)):0;
-      const dates=rows.map(row=>row.dueText).filter(Boolean);
-      const shortage=rows.reduce((maximum,row)=>Math.max(maximum,row.shortage),0);
-      return `<div class="phase ${shortage?"phase-risk":""}"><div class="phase-top"><span>${definition.step}</span><small>${esc(definition.copy)}</small></div><h4>${phaseLabel(definition.kind)}</h4><b>${formatWonShort(source)}</b><div class="source-meter"><i style="width:${ownWidth}%"></i></div><div class="source-legend"><span>내 현금 ${formatWonShort(own)}</span><span>대출 ${formatWonShort(loan)}</span></div><small class="phase-period">${dates.length?`${esc(dates[0].replaceAll("-","."))}${dates.length>1?` → ${esc(dates.at(-1).replaceAll("-","."))}`:""}`:"날짜 입력 필요"}</small>${shortage?`<em>${formatWonShort(shortage)} 부족</em>`:""}</div>`;
-    }).join('<i class="phase-arrow">→</i>');
+    const byPhase=kind=>plan.rows.filter(row=>(row.phaseKind||row.kind)===kind);
+    const contractRows=byPhase("contract"),interimRows=byPhase("interim"),closingRows=byPhase("balance");
+    const loanRows=interimRows.filter(row=>row.financing>0),selfRows=interimRows.filter(row=>!row.financing);
+    const plannedLoan=Math.min(plan.mortgageRequired,plan.loanCapacity.estimatedLimit);
+    const monthlyPayment=Math.round(monthlyLoanPayment(plannedLoan,plan.loanCapacity.mortgageInterestRate,plan.loanCapacity.mortgageYears));
+    const maxShort=rows=>rows.reduce((maximum,row)=>Math.max(maximum,row.shortage),0);
+    const moments=[
+      {step:"01",title:"계약",date:contractRows[0]?.dueText||"날짜 확인",need:sum(contractRows,"own"),note:`계약금${contractRows.length>1?` ${contractRows.length}회`:""} — 전액 내 현금`,shortage:maxShort(contractRows)},
+      {step:"02",title:"중도금 자납",date:selfRows.length?`${selfRows[0].dueText}${selfRows.length>1?` 외 ${selfRows.length-1}회`:""}`:(loanRows.length?"현금 부담 없음":"회차 없음"),need:sum(interimRows,"own"),note:loanRows.length?`${loanRows.length}회는 대출로 자동 처리 · 자납 ${selfRows.length}회만 현금${plan.monthlyPaidInterest?` · 이자 매월 납부`:""}`:"전 회차 자납",shortage:maxShort(interimRows)},
+      {step:"03",title:"잔금·입주",date:closingRows[0]?.dueText||"입주 지정일",need:sum(closingRows,"own"),note:`잔금+후불이자+세금 − 잔금대출 ${formatWonShort(sum(closingRows,"financing"))}`,shortage:maxShort(closingRows)},
+      {step:"04",title:"입주 후 매달",date:"대출 상환 기간",need:monthlyPayment,monthly:true,note:`잔금대출 ${formatWonShort(plannedLoan)} · ${plan.loanCapacity.mortgageYears}년 원리금균등 · 금리 ${plan.loanCapacity.mortgageInterestRate.toFixed(1)}% 가정`,shortage:0}
+    ];
+    $("fundingPhases").innerHTML=moments.map(m=>`<div class="moment ${m.shortage?"moment-risk":""}">
+      <div class="moment-top"><span>${m.step}</span><small>${esc(String(m.date).replaceAll("-","."))}</small></div>
+      <h4>${esc(m.title)}</h4><b>${formatWonShort(m.need)}${m.monthly?'<small class="per-month">/월</small>':""}</b>
+      <small class="moment-note">${esc(m.note)}</small>
+      ${m.shortage?`<em>▲ ${formatWonShort(m.shortage)} 부족</em>`:m.monthly?"":'<em class="moment-ok">✓ 충당 가능</em>'}
+    </div>`).join('<i class="phase-arrow">→</i>');
   }
   function renderFundingTimeline(plan){
     const maximum=Math.max(1,...plan.rows.map(row=>row.own+row.financing));
@@ -778,8 +801,32 @@
     const verdictCopy=finalGap?`필요 대출 ${formatWonShort(plan.mortgageRequired)}보다 예상 한도 ${formatWonShort(plan.mortgageTarget)}가 작습니다.`:hasScheduleGap?`${plan.firstShortage.dueText}까지 현금 투입 시점을 앞당겨야 합니다.`:`입주까지 마련할 자기자본과 예상 대출 한도가 총 필요자금을 충족합니다.`;
     const coverage=plan.totalCost?Math.max(0,Math.min(100,(plan.ownCapitalAtMoveIn+plan.mortgageTarget)/plan.totalCost*100)):100;
     const savingText=minimumSaving===null?"계약 전 현금 보강 필요":minimumSaving?`${formatWonShort(minimumSaving)}/월`:"현재 저축액으로 충족";
-    $("fundingHero").innerHTML=`<article class="funding-hero ${isRisk?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">FUNDING VERDICT</span><h3>${verdict}</h3><p>${esc(verdictCopy)}</p><div class="capital-equation"><span><small>입주까지 자기자본</small><b>${formatWonShort(plan.ownCapitalAtMoveIn)}</b></span><i>+</i><span><small>예상 대출한도</small><b>${formatWonShort(plan.mortgageTarget)}</b></span><i>−</i><span><small>총 필요자금</small><b>${formatWonShort(plan.totalCost)}</b></span></div><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>총 필요자금 충족도 ${coverage.toFixed(0)}%</small></div><div class="funding-hero-metrics"><div><span>실제로 필요한 잔금대출</span><b>${formatWonShort(plan.mortgageRequired)}</b></div><div><span>대출한도를 막는 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>총 중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></div></div></article>`;
-    $("fundingSummary").innerHTML=`<div><span>총 필요자금</span><b>${formatWonShort(plan.totalCost)}</b><small>분양가·옵션·세금·이자</small></div><div><span>입주까지 마련 자기자본</span><b>${formatWonShort(plan.ownCapitalAtMoveIn)}</b><small>시작현금 + 입주까지 총저축</small></div><div><span>필요 잔금대출</span><b>${formatWonShort(plan.mortgageRequired)}</b><small>총 필요자금 − 자기자본</small></div><div><span>예상 대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b><small>${esc(plan.loanCapacity.binding.label)} 적용</small></div><div class="${finalGap?"funding-risk":"funding-safe"}"><span>${finalGap?"최종 부족액":"최종 여유액"}</span><b>${formatWonShort(finalGap||plan.finalSurplus)}</b><small>${finalGap?"자기자본 또는 대출 보강 필요":"현재 입력 기준"}</small></div><div><span>선택 옵션·취득세</span><b>${formatWonShort(input.optionTotal+input.includedTax)}</b><small>옵션 ${input.selectedOptions.length}개 · 세금 포함</small></div>`;
+    const solutions=[];
+    if(isRisk){
+      if(minimumSaving===null)solutions.push("저축만으로는 계약 시점 공백을 못 메웁니다. 계약 전 현금(신용대출·가족 지원 등) 보강이 필요합니다.");
+      else if(minimumSaving>input.monthlySaving)solutions.push(`월 저축을 ${formatWonShort(input.monthlySaving)} → ${formatWonShort(minimumSaving)}로 올리면 납부 일정을 전부 통과합니다.`);
+      const pricingRow=notice.pricing.find(row=>row.size===input.size);
+      const lowPrice=num(pricingRow?.min);
+      if(lowPrice&&lowPrice<input.price){
+        const lowPlan=R.buildFundingPlan({...input,price:lowPrice,collateralValue:lowPrice,payments:input.payments.map(row=>({...row,fixedAmount:undefined}))});
+        solutions.push(lowPlan.loanShortage<=0&&!lowPlan.firstShortage?`같은 주택형 최저가(저층) ${formatWonShort(lowPrice)} 기준이면 현재 조건으로 가능합니다.`:`최저가(저층) ${formatWonShort(lowPrice)} 기준으로도 ${formatWonShort(lowPlan.loanShortage||lowPlan.firstShortage?.shortage||0)} 부족합니다.`);
+      }
+      if(plan.loanCapacity.binding.key==="dsr"){
+        const longer=R.calculateLoanCapacity({...input,mortgageYears:40});
+        const gain=longer.estimatedLimit-plan.mortgageTarget;
+        if(gain>0)solutions.push(`상환기간을 40년으로 늘리면 대출한도가 ${formatWonShort(gain)} 늘어납니다${gain>=finalGap&&finalGap>0?" — 부족분 해소 가능":""}.`);
+      }
+    }
+    $("fundingHero").innerHTML=`<article class="funding-hero ${isRisk?"is-risk":"is-safe"}"><div class="funding-hero-copy"><span class="kicker">FUNDING VERDICT</span><h3>${verdict}</h3><p>${esc(verdictCopy)}</p><div class="capital-equation"><span><small>입주까지 자기자본</small><b>${formatWonShort(plan.ownCapitalAtMoveIn)}</b></span><i>+</i><span><small>예상 대출한도</small><b>${formatWonShort(plan.mortgageTarget)}</b></span><i>−</i><span><small>총 필요자금</small><b>${formatWonShort(plan.totalCost)}</b></span></div><div class="readiness-track"><i style="width:${coverage}%"></i></div><small>총 필요자금 충족도 ${coverage.toFixed(0)}%</small>${solutions.length?`<div class="solution-list"><b>부족을 줄이는 현실적 선택지</b><ul>${solutions.map(item=>`<li>${esc(item)}</li>`).join("")}</ul></div>`:""}</div><div class="funding-hero-metrics"><div><span>실제로 필요한 잔금대출</span><b>${formatWonShort(plan.mortgageRequired)}</b></div><div><span>대출한도를 막는 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></div><div><span>필요 월저축액</span><b>${savingText}</b></div><div><span>총 중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></div></div></article>`;
+    const needRows=[["분양가",plan.price],["발코니·유상옵션",plan.optionTotal],["취득세·기타비용",input.extras],["중도금 이자",plan.totalInterimInterest]].filter(([,value])=>value>0);
+    const haveRows=[["시작 현금(남길 돈 제외)",plan.usableStart],["입주까지 저축",plan.grossSavingToMoveIn],["잔금대출 한도",plan.mortgageTarget]];
+    const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
+    $("fundingSummary").innerHTML=`<div class="fund-cols"><div class="fund-col need"><h4>총 필요자금 <b>${formatWonShort(plan.totalCost)}</b></h4><ul>${needRows.map(([label,value])=>`<li><span>${esc(label)}</span><b>${formatWonShort(value)}</b></li>`).join("")}</ul></div><div class="fund-col have"><h4>투입 가능액 <b>${formatWonShort(haveTotal)}</b></h4><ul>${haveRows.map(([label,value])=>`<li><span>${esc(label)}</span><b>${formatWonShort(value)}</b></li>`).join("")}<li class="cap"><span>한도 결정 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></li></ul></div></div><div class="fund-net ${finalGap?"bad":"ok"}">${finalGap?`▲ 부족 ${formatWonShort(finalGap)}`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>`;
+    $("scheduleFoldInfo").textContent=[input.contractDate,input.moveInDate].filter(Boolean).map(value=>value.slice(2).replaceAll("-",".")).join(" → ")||"날짜 미입력";
+    $("interimFoldInfo").textContent=`${plan.interestByInstallment.length?`대출 ${plan.interestByInstallment.length}회`:"전액 자납"} · 연 ${input.interimInterestRate}%`;
+    $("loanFoldInfo").textContent=`예상 한도 ${formatWonShort(plan.mortgageTarget)}`;
+    $("taxFoldInfo").textContent=formatWonShort(input.tax.total);
+    $("interestFoldInfo").textContent=`총 ${formatWonShort(plan.totalInterimInterest)}`;
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
@@ -804,6 +851,8 @@
       $("bothApply").checked=true;
       if(num($("quickChildren").value)>0&&!num($("marriageChildren").value))$("marriageChildren").value=$("quickChildren").value;
     }
+    const annualIncome=(num($("quickIncomeA").value)+(family==="married"?num($("quickIncomeB").value):0))*12;
+    if(annualIncome>0)$("annualIncome").value=formatNumberInput(annualIncome);
     renderProfileSummary();queueProfileSave();queueFundingSave();
   }
   function initQuickFromDetail(){
@@ -862,25 +911,25 @@
       $("quickResult").innerHTML=`<div class="quick-empty"><b>현재 입력으로 신청 가능한 유형이 없습니다.</b><br>통장 가입일(일반 1순위는 보통 24개월), 무주택 체크, 생년월일이 채워졌는지 확인해 주세요. 세부 요건(예치금·재당첨 제한 등)은 상세 모드의 '자격 체크' 표에서 확인할 수 있습니다.</div>`;
       return;
     }
-    const pickLines=picks.map(pick=>{
+    const planCache={};
+    const planFor=size=>{if(!(size in planCache))planCache[size]=quickFundingCheck(size);return planCache[size]};
+    const pickLines=picks.map((pick,index)=>{
       const row=pick.row;
-      return `<div class="quick-pick"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small></div><div class="quick-pick-chance">${esc(chanceLabel(row))}</div></div>`;
+      const plan=planFor(row.size);
+      let badge,detail="";
+      if(!plan)badge=`<span class="fund-badge warn">자금 미확인</span>`;
+      else if(plan.loanShortage>0)badge=`<span class="fund-badge bad">▲ 부족 ${formatWonShort(plan.loanShortage)}</span>`;
+      else if(plan.firstShortage)badge=`<span class="fund-badge warn">△ 중간공백 ${formatWonShort(plan.firstShortage.shortage)}</span>`;
+      else badge=`<span class="fund-badge ok">✓ 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
+      if(plan){
+        const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
+        detail=`<div class="quick-pick-detail is-hidden"><div class="fund-cols"><div class="fund-col need"><h5>필요자금 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가(최고가 기준)</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세 예상</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}<li class="cap"><span>발코니·옵션</span><b>상세 모드에서 선택</b></li></ul></div><div class="fund-col have"><h5>투입 가능 ${formatWonShort(haveTotal)}</h5><ul><li><span>지금 현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>입주까지 저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>잔금대출 한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li><li class="cap"><span>한도 결정 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)} — 저축 증액·낮은 평형·저층 가격 검토`:plan.firstShortage?`△ 총액은 가능하지만 ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}에 ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)} — 현재 조건으로 가능`}</div></div>`;
+      }
+      return `<div class="quick-pick" data-pick="${index}"><div class="quick-pick-row"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div><div class="quick-pick-side">${badge}<small class="tap-hint">탭하여 자금 상세 ▾</small></div></div>${detail}</div>`;
     }).join("");
     const sizes=[...new Set(picks.map(pick=>pick.row.size))];
-    const moneyRows=sizes.map(size=>{
-      const plan=quickFundingCheck(size);
-      if(!plan)return `<div class="quick-money-row warn"><i>!</i><span><b>${esc(size)} 주택형</b> · 분양가·납부일정이 아직 없습니다. 상세 모드에서 공고 숫자를 검수하면 자금 판정이 붙습니다.</span></div>`;
-      const priceText=formatWonShort(plan.price);
-      if(plan.loanShortage>0){
-        const months=plan.grossSavingToMoveIn&&plan.monthlySaving?Math.round(plan.grossSavingToMoveIn/plan.monthlySaving):0;
-        const extraSaving=months>0?Math.ceil(plan.loanShortage/months/10000)*10000:0;
-        return `<div class="quick-money-row bad"><i>✕</i><span><b>${esc(size)} · 최고가 ${priceText} 기준 자금 부족 ${formatWonShort(plan.loanShortage)}</b> · 자기자본(입주까지 ${formatWonShort(plan.ownCapitalAtMoveIn)})과 예상 대출한도(${formatWonShort(plan.mortgageTarget)})를 다 써도 모자랍니다.${extraSaving?` 월 저축을 약 ${formatWonShort(extraSaving)} 더 늘리거나`:""} 더 작은 평형·낮은 층 가격을 검토하세요.</span></div>`;
-      }
-      if(plan.firstShortage)return `<div class="quick-money-row warn"><i>!</i><span><b>${esc(size)} · 총액은 가능하지만 중간에 현금이 빕니다.</b> ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}에 ${formatWonShort(plan.firstShortage.shortage)} 부족 — 저축 시점을 앞당기거나 상세 모드 자금 플랜에서 회차별 조정이 필요합니다.</span></div>`;
-      return `<div class="quick-money-row ok"><i>✓</i><span><b>${esc(size)} · 최고가 ${priceText} 기준 자금 가능</b> · 입주까지 자기자본 ${formatWonShort(plan.ownCapitalAtMoveIn)} + 예상 대출한도 ${formatWonShort(plan.mortgageTarget)}로 충당, 여유 ${formatWonShort(plan.finalSurplus)}.</span></div>`;
-    }).join("");
     const verifiedNote=notice.verified?"":`<p class="quick-hero-warn">⚠ 이 공고 숫자는 아직 검수 전입니다. 상세 모드 '모집공고'에서 원문과 대조하면 정확도가 올라갑니다.</p>`;
-    $("quickResult").innerHTML=`<article class="quick-hero"><span class="kicker">RECOMMENDATION</span><h3>${esc(notice.projectName||"공고")} — 이렇게 넣으세요</h3><p>자격·물량·소득단계${sizes.some(size=>sizeExpectation(size).generalRate||sizeExpectation(size).cutline)?"·실제 경쟁률":""}를 반영한 추천입니다. 부부는 각자 특공+일반까지 총 4장이 가능합니다.</p>${verifiedNote}<div class="quick-picks">${pickLines}</div><div class="quick-money">${moneyRows}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
+    $("quickResult").innerHTML=`<article class="quick-hero"><span class="kicker">RECOMMENDATION</span><h3>${esc(notice.projectName||"공고")} — 이렇게 넣으세요</h3><p>자격·물량·소득단계${sizes.some(size=>sizeExpectation(size).generalRate||sizeExpectation(size).cutline)?"·경쟁률 데이터":""}를 반영한 추천입니다. 부부는 각자 특공+일반까지 총 4장이 가능합니다.</p>${verifiedNote}<div class="quick-picks">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
   }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
   const APPLYHOME_BASE="https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1";
@@ -1332,7 +1381,16 @@
   $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickResult()});
   $("quickResult").addEventListener("click",event=>{
     const button=event.target.closest("[data-quick-go]");
-    if(button)setUiMode(false,button.dataset.quickGo);
+    if(button){setUiMode(false,button.dataset.quickGo);return}
+    const pick=event.target.closest(".quick-pick");
+    if(pick)pick.querySelector(".quick-pick-detail")?.classList.toggle("is-hidden");
+  });
+  $("priceChips").addEventListener("click",event=>{
+    const chip=event.target.closest("[data-price]");
+    if(!chip)return;
+    $("planPrice").value=formatNumberInput(chip.dataset.price);
+    $("collateralValue").value=formatNumberInput(chip.dataset.price);
+    queueFundingSave();renderFundingPlan();
   });
   $("liveBannerToggle").addEventListener("click",()=>{
     const list=$("liveBannerList");
@@ -1365,7 +1423,7 @@ $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderF
   FINANCE_IDS.filter(id=>id!=="planSize").forEach(id=>$(id)?.addEventListener("input",()=>{queueFundingSave();clearTimeout(fundingRenderTimer);fundingRenderTimer=setTimeout(renderFundingPlan,250)}));
   $("calculateFunding").addEventListener("click",renderFundingPlan);
 
-  setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
+  wrapSuffixInputs();setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
   setUiMode((localStorage.getItem(UI_MODE_KEY)||"simple")==="simple");
   loadLiveNotices();
 })();
