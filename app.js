@@ -1235,6 +1235,14 @@
     if(event.target.closest("#applyhomeApply"))applyhomeApplyRates();
   });
   $("applyhomeKey").value=localStorage.getItem(APPLYHOME_KEY_STORE)||"";
+  let applyhomeKeySaveTimer;
+  $("applyhomeKey").addEventListener("input",()=>{
+    clearTimeout(applyhomeKeySaveTimer);
+    applyhomeKeySaveTimer=setTimeout(()=>{
+      localStorage.setItem(APPLYHOME_KEY_STORE,$("applyhomeKey").value.trim());
+      if(applyhomeKey()){localStorage.removeItem(LIVE_CACHE_KEY);toast("인증키를 저장했습니다. 실시간 공고를 불러옵니다.");loadLiveNotices()}
+    },600);
+  });
   $("openAdvanced").addEventListener("click",()=>setUiMode(false));
   $("backToQuick").addEventListener("click",()=>setUiMode(true));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",updateQuickVisibility));
