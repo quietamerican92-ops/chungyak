@@ -1001,10 +1001,11 @@
     }catch(error){$("liveBannerText").textContent="실시간 공고 조회 실패 — 인증키와 트래픽을 확인하세요"}
   }
   function renderLiveList(){
-    $("liveBannerList").innerHTML=liveNotices.length?liveNotices.map(row=>{
+    const items=liveNotices.length?liveNotices.map(row=>{
       const status=liveStatus(row);
       return `<button type="button" class="live-item" data-live-house="${esc(row.no)}"><span class="live-status ${status.cls}">${esc(status.label)}</span><b>${esc(row.name)}</b><small>${esc(row.area)} · 공고 ${esc(row.notice)}${row.announce?` · 발표 ${esc(row.announce)}`:""}</small></button>`;
     }).join(""):`<div class="live-empty">표시할 공고가 없습니다. 인증키 등록 후 새로고침해 주세요.</div>`;
+    $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><button type="button" id="liveRefresh">목록 지금 새로고침</button><small>공공데이터 API는 청약홈 사이트 게시보다 최대 하루가량 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
   }
   async function applyRemoteNotice(house){
     const key=applyhomeKey();
@@ -1261,7 +1262,15 @@
     if(house)applyRemoteNotice(house);
     else{setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus()}
   });
-  $("liveBannerList").addEventListener("click",event=>{
+  $("liveBannerList").addEventListener("click",async event=>{
+    if(event.target.closest("#liveRefresh")){
+      localStorage.removeItem(LIVE_CACHE_KEY);
+      $("liveBannerText").textContent="서울·경기 실시간 공고 다시 불러오는 중…";
+      await loadLiveNotices();
+      renderLiveList();
+      toast(`공고 ${liveNotices.length}건을 다시 불러왔습니다.`);
+      return;
+    }
     const item=event.target.closest("[data-live-house]");
     if(item)applyRemoteNotice(item.dataset.liveHouse);
   });

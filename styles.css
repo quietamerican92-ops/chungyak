@@ -326,3 +326,7 @@ body.simple-mode #quick{display:block}
   #runCompare{width:100%}
   .compare-choices{grid-template-columns:1fr}
 }
+.live-list-foot{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);margin-top:4px;padding:9px 10px 6px}
+.live-list-foot button{border:1px solid var(--line);background:#f7f9f5;color:var(--green);border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900}
+.live-list-foot button:hover{background:#eef4ee}
+.live-list-foot small{font-size:9px;color:var(--muted);line-height:1.5}
