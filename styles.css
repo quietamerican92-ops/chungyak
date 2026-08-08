@@ -219,6 +219,18 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .cand-seat{flex:none;font-size:11px;color:var(--muted);font-weight:700}
 .cand-seat b{color:var(--ink);font-weight:900}
 .cand-foot .bar{flex:1;margin-top:0}
+/* 평형별 공급물량 표: 입력칸 슬림화 + 좌측 2열(주택형·실제 전용㎡) 스크롤 고정 */
+.supply-table{font-size:12px}
+.supply-table th{padding:8px 7px;font-size:10.5px}
+.supply-table td{padding:4px 6px}
+.supply-table input{min-width:46px;padding:5px 7px;border-radius:7px;font-size:12px;border-color:#d3dad4}
+.supply-table input.name{min-width:50px;font-weight:800}
+.supply-table input:focus{border-color:var(--green)}
+.supply-table .icon-delete{padding:5px 8px}
+.supply-table th:nth-child(1),.supply-table td:nth-child(1){position:sticky;left:0;z-index:2;width:58px;min-width:58px;background:#fff}
+.supply-table th:nth-child(2),.supply-table td:nth-child(2){position:sticky;left:58px;z-index:2;width:82px;min-width:82px;background:#fff;box-shadow:6px 0 8px -6px rgba(23,32,25,.18)}
+.supply-table thead th:nth-child(1),.supply-table thead th:nth-child(2){background:#f7f9f5;z-index:3}
+.supply-table tfoot td:nth-child(1),.supply-table tfoot td:nth-child(2){background:#f3f7f2}
 @media(max-width:760px){.applyhome-controls{grid-template-columns:1fr}.tips-grid{grid-template-columns:1fr}.expectation-table input{width:80px}}
 
 /* Mobile 2.0: touch-friendly, GitHub Pages/홈화면 설치 대응 */
