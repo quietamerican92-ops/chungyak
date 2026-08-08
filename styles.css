@@ -197,10 +197,28 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .applyhome-results .hint{margin:6px 0 0}
 .tips-card{margin-top:18px}
 .tips-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:6px}
-.tip{display:flex;flex-direction:column;gap:5px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#fbfcfb}
-.tip b{font-size:12px;color:var(--ink)}
-.tip p{margin:0;font-size:10px;line-height:1.65;color:#3d463f}
-.tip small{font-size:8px;color:var(--muted);font-weight:800}
+.tip{display:flex;flex-direction:column;gap:6px;padding:14px 15px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:12px;background:#fbfcfb}
+.tip-stat{align-self:flex-start;font-size:15px;font-weight:950;color:var(--green);background:var(--green2);border-radius:8px;padding:3px 10px;letter-spacing:-.02em;line-height:1.2}
+.tip b{font-size:14px;color:var(--ink);letter-spacing:-.02em}
+.tip p{margin:0;font-size:11px;line-height:1.6;color:#3d463f}
+.tip small{font-size:9px;color:var(--muted);font-weight:800}
+.cand-list{display:flex;flex-direction:column;gap:10px}
+.cand{border:1px solid var(--line);border-radius:13px;padding:13px 14px;background:#fbfcfb}
+.cand-head{display:flex;align-items:center;gap:10px}
+.cand-rank{flex:none;width:23px;height:23px;border-radius:7px;background:var(--green2);color:var(--green);font-weight:900;font-size:11px;display:grid;place-items:center}
+.cand-id{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.cand-id b{font-size:14px;line-height:1.2;letter-spacing:-.02em}
+.cand-person{align-self:flex-start;font-size:10px;font-weight:900;color:var(--green);background:var(--green2);border-radius:99px;padding:2px 8px}
+.cand-person.pB{color:var(--blue);background:#e9eef9}
+.cand-chance{flex:none;text-align:right;display:flex;flex-direction:column;line-height:1.05}
+.cand-chance em{font-style:normal;font-size:19px;font-weight:950;color:var(--ink)}
+.cand-chance.win em{color:var(--green)}
+.cand-chance small{font-size:9px;color:var(--muted);font-weight:800;margin-top:3px}
+.cand-reason{margin:10px 0;font-size:11px;line-height:1.55;color:#3d463f}
+.cand-foot{display:flex;align-items:center;gap:12px}
+.cand-seat{flex:none;font-size:11px;color:var(--muted);font-weight:700}
+.cand-seat b{color:var(--ink);font-weight:900}
+.cand-foot .bar{flex:1;margin-top:0}
 @media(max-width:760px){.applyhome-controls{grid-template-columns:1fr}.tips-grid{grid-template-columns:1fr}.expectation-table input{width:80px}}
 
 /* Mobile 2.0: touch-friendly, GitHub Pages/홈화면 설치 대응 */

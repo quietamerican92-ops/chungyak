@@ -577,9 +577,24 @@
       </div></div>`;
   }
   function renderCandidates(rows){
-    $("candidateTable").innerHTML=rows.length?`<table><thead><tr><th>신청자</th><th>주택형·유형</th><th>실제 물량</th><th>전략지수·확률</th></tr></thead><tbody>${rows.slice(0,24).map(row=>`<tr>
-      <td>${row.personLabel}</td><td><b>${esc(row.size)} · ${R.TYPE_LABELS[row.type]}</b><br><span class="muted">${esc(row.reasons.slice(1).join(" · "))}</span></td>
-      <td class="num-cell">${esc(row.seatText)}</td><td class="num-cell"><span class="seat-main">${row.winChance!==null&&row.winChance!==undefined?(row.winChance>=1?"당첨권":(row.winChance*100).toFixed(row.winChance<.1?1:0)+"%"):row.score.toFixed(1)}</span><div class="bar"><i style="width:${row.score}%"></i></div></td></tr>`).join("")}</tbody></table>`:"<p class='muted'>추천 후보가 없습니다.</p>";
+    if(!rows.length){$("candidateTable").innerHTML="<p class='muted'>추천 후보가 없습니다.</p>";return;}
+    const cards=rows.slice(0,24).map((row,i)=>{
+      const hasChance=row.winChance!==null&&row.winChance!==undefined;
+      const win=hasChance&&row.winChance>=1;
+      const chance=hasChance?(win?"당첨권":(row.winChance*100).toFixed(row.winChance<.1?1:0)+"%"):row.score.toFixed(0);
+      const chanceLabel=hasChance?(win?"가점 당첨권":"당첨확률"):"전략지수";
+      const personCls=row.personKey==="b"?"pB":"pA";
+      return `<div class="cand">
+        <div class="cand-head">
+          <span class="cand-rank">${i+1}</span>
+          <div class="cand-id"><b>${esc(row.size)} · ${R.TYPE_LABELS[row.type]}</b><span class="cand-person ${personCls}">${esc(row.personLabel)}</span></div>
+          <div class="cand-chance ${win?"win":""}"><em>${esc(chance)}</em><small>${chanceLabel}</small></div>
+        </div>
+        <p class="cand-reason">${esc(row.reasons.slice(1).join(" · "))}</p>
+        <div class="cand-foot"><span class="cand-seat">실제 물량 <b>${esc(row.seatText)}</b></span><div class="bar"><i style="width:${row.score}%"></i></div></div>
+      </div>`;
+    }).join("");
+    $("candidateTable").innerHTML=`<div class="cand-list">${cards}</div>`;
   }
   function renderEligibility(profile){
     const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
@@ -599,16 +614,16 @@
     const childAge=R.normalizeDate(profile.youngestBirth)&&R.normalizeDate(notice.noticeDate)?R.yearsBetween(profile.youngestBirth,notice.noticeDate):99;
     if(cutlines.length){
       const minCut=Math.min(...cutlines);
-      if(aGeneral.points>=minCut)tips.push({title:"가점제 직행 가능",body:`신청자 A 가점 ${aGeneral.points}점이 입력한 최저 커트라인 ${minCut}점 이상입니다. 커트라인이 낮은 주택형의 가점제 물량을 1지망으로 두는 것이 정석입니다.`,source:"입력한 커트라인 기준"});
-      else tips.push({title:"가점제 대신 추첨 우회",body:`신청자 A 가점 ${aGeneral.points}점은 입력한 커트라인(최저 ${minCut}점)에 미달합니다. 가점 물량은 사실상 소진용이므로, 추첨 비중이 큰 85㎡ 초과·비선호 타입(저층·향·코너)으로 우회하면 실제 확률이 올라갑니다.`,source:"KB부동산 2026 전략형 청약"});
+      if(aGeneral.points>=minCut)tips.push({stat:`가점 ${aGeneral.points}점`,title:"가점제 1지망 직행",body:`최저 커트라인 ${minCut}점 돌파. 커트라인 낮은 주택형의 가점 물량을 1지망으로 박는 게 정석.`,source:"입력한 커트라인 기준"});
+      else tips.push({stat:`커트라인 ${minCut-aGeneral.points}점 부족`,title:"가점 버리고 추첨 우회",body:`가점 ${aGeneral.points}점은 사실상 소진용. 추첨 비중 큰 85㎡ 초과·비선호(저층·향·코너)로 돌리면 실제 확률이 뒤집힌다.`,source:"KB부동산 2026 전략형 청약"});
     }
-    if(anySpecial)tips.push({title:"특별공급 우선 소진",body:"자격이 되는 특공은 일반공급보다 경쟁률이 낮은 경우가 많고, 각 소득단계에서 떨어져도 다음 단계·일반공급 추첨에 자동으로 넘어갑니다. 특공+일반 동시신청(1인 최대 2건)을 항상 채우세요.",source:"청약Home 제도 안내"});
-    if((num(profile.fetuses)>0||childAge<=2))tips.push({title:"신생아 특별공급 신설 활용",body:"2026.6.15부터 민영주택에도 특공 물량의 10%가 신생아 특공으로 별도 배정됩니다. 2세 미만 자녀·태아가 있으면 혼인 7년 초과로 신혼특공이 막혀도 신생아 특공으로 신청할 수 있습니다.",source:"국토부 2026.6 제도개편"});
-    if(married)tips.push({title:"부부 중복신청 전략",body:"부부는 같은 단지에 각자 특공+일반을 신청할 수 있습니다(최대 4건). 같은 발표일 주택에 부부가 중복당첨되면 접수일시가 빠른 건만 유효하므로, 청약 첫날 이른 시간에 접수하고 부부가 서로 다른 특공 유형(예: A 신혼 · B 생애최초)으로 나누면 기회가 넓어집니다.",source:"주택공급규칙 §55조의2 · 공고문 확인"});
-    tips.push({title:"평형 쏠림 역이용",body:"2026년 상반기 전국 1순위 경쟁률은 전용 60㎡ 이하 약 14:1, 60~85㎡ 3.4:1, 85㎡ 초과 3.4:1로 소형 쏠림이 심합니다(같은 단지에서 59가 84보다 20배 높은 사례도 있음). 자금 여력이 되면 중대형이 확률상 유리합니다.",source:"부동산R114·언론 집계 2026.7"});
-    tips.push({title:"예비당첨·무순위까지 한 사이클",body:"수도권 예비당첨자는 공급물량의 500%까지 뽑습니다. 낙첨돼도 예비번호가 앞이면 부적격·계약포기 물량 기회가 오고, 그다음 무순위(줍줍) 공고도 같은 단지에서 이어지므로 발표 후 일정도 챙기세요.",source:"청약Home 제도 안내"});
-    if(notice.generalHeadRequired==="yes")tips.push({title:"규제지역 당첨 후 의무 확인",body:"이 공고는 규제지역 기준(세대주 요건)이 적용됩니다. 당첨 시 재당첨 제한(최대 10년), 전매제한, 실거주 의무가 따라오므로 공고문 해당 조항을 계약 전에 반드시 확인하세요.",source:"공고문·주택공급규칙"});
-    $("strategyTips").innerHTML=tips.length?`<article class="card tips-card"><div class="card-head"><div><span class="kicker">STRATEGY TIPS</span><h3>지금 시장에서 통하는 전략 포인트</h3><p>2026년 상반기 청약 시장 데이터와 제도 개편을 반영한 참고 전략입니다.</p></div></div><div class="tips-grid">${tips.map(tip=>`<div class="tip"><b>${esc(tip.title)}</b><p>${esc(tip.body)}</p><small>근거 · ${esc(tip.source)}</small></div>`).join("")}</div></article>`:"";
+    if(anySpecial)tips.push({stat:"1인 2건 풀가동",title:"특공 먼저, 칸부터 채워라",body:"특공은 일반보다 경쟁률↓, 떨어져도 다음 단계·일반 추첨으로 자동 승계. 특공+일반 동시신청은 무조건 채운다.",source:"청약Home 제도 안내"});
+    if((num(profile.fetuses)>0||childAge<=2))tips.push({stat:"특공 물량 10%",title:"신생아 특공 신설",body:"2026.6.15부터 민영 특공의 10%가 신생아 몫. 혼인 7년 초과로 신혼특공이 막혀도 2세 미만·태아면 신청 가능.",source:"국토부 2026.6 제도개편"});
+    if(married)tips.push({stat:"부부 최대 4건",title:"부부는 카드가 4장",body:"각자 특공+일반. 중복당첨되면 접수 빠른 건만 유효 → 첫날 이른 시간 접수, 유형 분산(A 신혼·B 생애최초).",source:"주택공급규칙 §55조의2 · 공고문 확인"});
+    tips.push({stat:"소형 최대 20배차",title:"소형 쏠림을 역이용",body:"2026 상반기 1순위 경쟁률 60㎡↓ 14:1 vs 85㎡↑ 3.4:1. 같은 단지 59가 84보다 20배 붐빈 사례도. 자금 되면 중대형이 확률상 유리.",source:"부동산R114·언론 집계 2026.7"});
+    tips.push({stat:"예비 500%",title:"낙첨해도 한 사이클 더",body:"수도권 예비당첨은 공급물량의 500%까지. 번호 앞이면 계약포기분, 이어 무순위(줍줍)까지 발표 후 일정을 챙겨라.",source:"청약Home 제도 안내"});
+    if(notice.generalHeadRequired==="yes")tips.push({stat:"재당첨 최대 10년",title:"당첨엔 의무가 따라온다",body:"규제지역(세대주 요건) 공고 — 재당첨 제한·전매제한·실거주 의무. 계약 전 해당 조항 필수 확인.",source:"공고문·주택공급규칙"});
+    $("strategyTips").innerHTML=tips.length?`<article class="card tips-card"><div class="card-head"><div><span class="kicker">STRATEGY TIPS</span><h3>지금 시장에서 통하는 전략 포인트</h3><p>2026년 상반기 청약 시장 데이터와 제도 개편을 반영한 참고 전략입니다.</p></div></div><div class="tips-grid">${tips.map(tip=>`<div class="tip">${tip.stat?`<span class="tip-stat">${esc(tip.stat)}</span>`:""}<b>${esc(tip.title)}</b><p>${esc(tip.body)}</p><small>근거 · ${esc(tip.source)}</small></div>`).join("")}</div></article>`:"";
   }
 
   function loadFundingInputs(){
