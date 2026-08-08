@@ -439,7 +439,7 @@ label:has(.suffix) input{padding-right:42px}
 .compare-money-card{margin-top:16px}
 /* quick pick 카드: 칩 우상단 + 상세는 우측에서 슬라이드(카드 높이 유지) */
 .quick-pick{position:relative;overflow:hidden;cursor:pointer;min-height:185px;display:flex;flex-direction:column;justify-content:center}
-.quick-pick-row{display:flex;align-items:stretch;gap:11px;padding:14px 15px}
+.quick-pick-row{display:flex;align-items:stretch;gap:11px;padding:14px 15px;width:100%;box-sizing:border-box}
 .quick-pick .fund-badge{position:absolute;top:12px;right:13px;z-index:1}
 .quick-pick-main{flex:1;min-width:0}
 .quick-pick-type{flex:0 0 96px;width:96px;max-width:96px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:9px 10px;border-radius:11px}
