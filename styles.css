@@ -231,6 +231,19 @@ input:disabled{background:#eef1ec;color:#6c756e}
 .supply-table th:nth-child(2),.supply-table td:nth-child(2){position:sticky;left:58px;z-index:2;width:82px;min-width:82px;background:#fff;box-shadow:6px 0 8px -6px rgba(23,32,25,.18)}
 .supply-table thead th:nth-child(1),.supply-table thead th:nth-child(2){background:#f7f9f5;z-index:3}
 .supply-table tfoot td:nth-child(1),.supply-table tfoot td:nth-child(2){background:#f3f7f2}
+/* 넓은 표 공통: 좌측 식별열 스크롤 고정 + 입력칸 슬림화 */
+.payment-source-table input,.payment-source-table select,.expectation-table input{padding:5px 7px;border-radius:7px;font-size:12px;border-color:#d3dad4}
+.payment-source-table input:focus,.payment-source-table select:focus,.expectation-table input:focus{border-color:var(--green)}
+.payment-source-table th,.expectation-table th{padding:8px 7px}
+.payment-source-table td,.expectation-table td{padding:5px 6px}
+.expectation-table input{width:76px}
+.payment-source-table th:first-child,.payment-source-table td:first-child,
+.expectation-table th:first-child,.expectation-table td:first-child,
+#generalSeats th:first-child,#generalSeats td:first-child,
+#specialSeats th:first-child,#specialSeats td:first-child,
+#eligibilityTable th:first-child,#eligibilityTable td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:6px 0 8px -6px rgba(23,32,25,.18)}
+.payment-source-table thead th:first-child,.expectation-table thead th:first-child,#generalSeats thead th:first-child,#specialSeats thead th:first-child,#eligibilityTable thead th:first-child{background:#f7f9f5;z-index:3}
+.payment-source-table tfoot td:first-child{background:#f3f7f2}
 @media(max-width:760px){.applyhome-controls{grid-template-columns:1fr}.tips-grid{grid-template-columns:1fr}.expectation-table input{width:80px}}
 
 /* Mobile 2.0: touch-friendly, GitHub Pages/홈화면 설치 대응 */
