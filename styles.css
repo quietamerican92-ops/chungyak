@@ -438,7 +438,7 @@ label:has(.suffix) input{padding-right:42px}
 .solution-list li{font-size:11px;line-height:1.55;color:#dfe9e2}
 .compare-money-card{margin-top:16px}
 /* quick pick 카드: 칩 우상단 + 상세는 우측에서 슬라이드(카드 높이 유지) */
-.quick-pick{position:relative;overflow:hidden;cursor:pointer;min-height:152px;display:flex;flex-direction:column;justify-content:flex-start}
+.quick-pick{position:relative;overflow:hidden;cursor:pointer;min-height:185px;display:flex;flex-direction:column;justify-content:center}
 .quick-pick-row{display:flex;align-items:stretch;gap:11px;padding:14px 15px}
 .quick-pick .fund-badge{position:absolute;top:12px;right:13px;z-index:1}
 .quick-pick-main{flex:1;min-width:0}
@@ -453,12 +453,12 @@ label:has(.suffix) input{padding-right:42px}
 .quick-pick-type.pB b{color:#e4edff}
 .tap-hint{position:absolute;bottom:10px;right:13px;font-size:9px;color:#9fb3a6;font-weight:800;z-index:1}
 .quick-pick-chance{display:block;margin-top:4px;text-align:left;font-size:12px;font-weight:900;color:var(--lime)}
-.quick-pick-detail{position:absolute;inset:0;z-index:3;transform:translateX(101%);transition:transform .26s cubic-bezier(.4,0,.2,1);background:#16281f;padding:11px 13px;display:flex;flex-direction:column;gap:7px;overflow:auto}
+.quick-pick-detail{position:absolute;inset:0;z-index:3;transform:translateX(101%);transition:transform .26s cubic-bezier(.4,0,.2,1);background:#16281f;padding:11px 13px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
 .quick-pick.open .quick-pick-detail{transform:translateX(0)}
-.qpd-top{display:flex;justify-content:space-between;align-items:center}
+.qpd-top{flex:none;display:flex;justify-content:space-between;align-items:center}
 .qpd-top span{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--lime)}
 .qpd-top small{font-size:9px;color:#9fb3a6;font-weight:800}
-.quick-pick-detail .fund-cols{grid-template-columns:1fr 1fr;gap:8px}
+.quick-pick-detail .fund-cols{grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;overflow:auto;align-content:start}
 .quick-pick-detail .fund-col{background:#ffffff0d;border-color:#ffffff22;padding:9px 10px}
 .quick-pick-detail .fund-col h5{color:#eef6f0;margin:0 0 6px;font-size:11px}
 .quick-pick-detail .fund-col ul{gap:4px}
@@ -467,7 +467,7 @@ label:has(.suffix) input{padding-right:42px}
 .quick-pick-detail .fund-col li b{color:#fff}
 .quick-pick-detail .fund-col.need h5 b{color:#f2b06a}
 .quick-pick-detail .fund-col.have h5 b{color:#9fc1f2}
-.quick-pick-detail .fund-net{margin-top:6px;padding:7px 10px;font-size:12px}
+.quick-pick-detail .fund-net{flex:none;margin-top:0;padding:8px 10px;font-size:12px}
 .quick-pick-detail .fund-net.ok{background:#1d3a2c;color:#8fe3b3}
 .quick-pick-detail .fund-net.warn{background:#3a2f1d;color:#f2c98a}
 .quick-pick-detail .fund-net.bad{background:#3a1d1d;color:#f2a0a0}
