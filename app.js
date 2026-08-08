@@ -619,7 +619,7 @@
     }
     if(anySpecial)tips.push({stat:"1인 2건 풀가동",title:"특공 먼저, 칸부터 채워라",body:"특공은 일반보다 경쟁률↓, 떨어져도 다음 단계·일반 추첨으로 자동 승계. 특공+일반 동시신청은 무조건 채운다.",source:"청약Home 제도 안내"});
     if((num(profile.fetuses)>0||childAge<=2))tips.push({stat:"특공 물량 10%",title:"신생아 특공 신설",body:"2026.6.15부터 민영 특공의 10%가 신생아 몫. 혼인 7년 초과로 신혼특공이 막혀도 2세 미만·태아면 신청 가능.",source:"국토부 2026.6 제도개편"});
-    if(married)tips.push({stat:"부부 최대 4건",title:"부부는 카드가 4장",body:"각자 특공+일반. 중복당첨되면 접수 빠른 건만 유효 → 첫날 이른 시간 접수, 유형 분산(A 신혼·B 생애최초).",source:"주택공급규칙 §55조의2 · 공고문 확인"});
+    if(married){const reg=notice.generalHeadRequired==="yes";tips.push({stat:reg?"부부 3장":"부부 4장",title:"부부 카드 최대로 쓰기",body:reg?"규제지역이라 일반 1순위는 세대주만 — 특공 2 + 일반 1 = 합산 3장. 유형 분산(A 신혼·B 생애최초), 첫날 이른 접수.":"각자 특공+일반 = 합산 4장. 중복당첨 시 접수 빠른 건만 유효 → 첫날 이른 접수, 유형 분산(A 신혼·B 생애최초).",source:"주택공급규칙 · 규제지역 세대주 요건"});}
     tips.push({stat:"소형 최대 20배차",title:"소형 쏠림을 역이용",body:"2026 상반기 1순위 경쟁률 60㎡↓ 14:1 vs 85㎡↑ 3.4:1. 같은 단지 59가 84보다 20배 붐빈 사례도. 자금 되면 중대형이 확률상 유리.",source:"부동산R114·언론 집계 2026.7"});
     tips.push({stat:"예비 500%",title:"낙첨해도 한 사이클 더",body:"수도권 예비당첨은 공급물량의 500%까지. 번호 앞이면 계약포기분, 이어 무순위(줍줍)까지 발표 후 일정을 챙겨라.",source:"청약Home 제도 안내"});
     if(notice.generalHeadRequired==="yes")tips.push({stat:"재당첨 최대 10년",title:"당첨엔 의무가 따라온다",body:"규제지역(세대주 요건) 공고 — 재당첨 제한·전매제한·실거주 의무. 계약 전 해당 조항 필수 확인.",source:"공고문·주택공급규칙"});
@@ -938,13 +938,16 @@
       else badge=`<span class="fund-badge ok">✓ 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
       if(plan){
         const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
-        detail=`<div class="quick-pick-detail is-hidden"><div class="fund-cols"><div class="fund-col need"><h5>필요자금 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가(최고가 기준)</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세 예상</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}<li class="cap"><span>발코니·옵션</span><b>상세 모드에서 선택</b></li></ul></div><div class="fund-col have"><h5>투입 가능 ${formatWonShort(haveTotal)}</h5><ul><li><span>지금 현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>입주까지 저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>잔금대출 한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li><li class="cap"><span>한도 결정 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)} — 저축 증액·낮은 평형·저층 가격 검토`:plan.firstShortage?`△ 총액은 가능하지만 ${esc(plan.firstShortage.dueText)} ${esc(plan.firstShortage.label)}에 ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)} — 현재 조건으로 가능`}</div></div>`;
+        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ ${esc(plan.firstShortage.label)} ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div></div>`;
       }
-      return `<div class="quick-pick" data-pick="${index}"><div class="quick-pick-row"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div><div class="quick-pick-side">${badge}<small class="tap-hint">탭하여 자금 상세 ▾</small></div></div>${detail}</div>`;
+      return `<div class="quick-pick" data-pick="${index}">${badge}<div class="quick-pick-row"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div></div><small class="tap-hint">자금 상세 ▸</small>${detail}</div>`;
     }).join("");
-    const sizes=[...new Set(picks.map(pick=>pick.row.size))];
+    const regulated=notice.generalHeadRequired==="yes";
+    const cardText=plans.useB
+      ?(regulated?"규제지역 · 부부 합산 3장 (특공 2·일반 1, 일반 1순위는 세대주만)":"부부 합산 4장 (각자 특공+일반)")
+      :(regulated?"규제지역 · 일반 1순위는 세대주만":"특공+일반 최대 2장");
     const verifiedNote=notice.verified?"":`<p class="quick-hero-warn">⚠ 이 공고 숫자는 아직 검수 전입니다. 상세 모드 '모집공고'에서 원문과 대조하면 정확도가 올라갑니다.</p>`;
-    $("quickResult").innerHTML=`<article class="quick-hero"><span class="kicker">RECOMMENDATION</span><h3>${esc(notice.projectName||"공고")} — 이렇게 넣으세요</h3><p>자격·물량·소득단계${sizes.some(size=>sizeExpectation(size).generalRate||sizeExpectation(size).cutline)?"·경쟁률 데이터":""}를 반영한 추천입니다. 부부는 각자 특공+일반까지 총 4장이 가능합니다.</p>${verifiedNote}<div class="quick-picks">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
+    $("quickResult").innerHTML=`<article class="quick-hero"><span class="kicker">RECOMMENDATION</span><h3>${esc(notice.projectName||"공고")}<span class="quick-hero-tag"> · 이렇게 넣으세요</span></h3><p class="quick-hero-guide">${esc(cardText)}</p>${verifiedNote}<div class="quick-picks">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
   }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
   const APPLYHOME_BASE="https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1";
@@ -1398,7 +1401,7 @@
     const button=event.target.closest("[data-quick-go]");
     if(button){setUiMode(false,button.dataset.quickGo);return}
     const pick=event.target.closest(".quick-pick");
-    if(pick)pick.querySelector(".quick-pick-detail")?.classList.toggle("is-hidden");
+    if(pick)pick.classList.toggle("open");
   });
   $("priceChips").addEventListener("click",event=>{
     const chip=event.target.closest("[data-price]");
