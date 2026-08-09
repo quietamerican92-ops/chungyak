@@ -477,3 +477,4 @@ label:has(.suffix) input{padding-right:42px}
   .fund-cols{grid-template-columns:1fr}
   .fold>summary{padding:12px 13px}
 }
+.live-kind{font-style:normal;font-size:9px;font-weight:900;color:#8a3e00;background:#fff0dc;border-radius:99px;padding:2px 6px;margin-left:4px;vertical-align:middle}

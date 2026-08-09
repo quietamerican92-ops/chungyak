@@ -149,6 +149,37 @@
     return [...found.values()];
   }
 
+  function parseRemainderSupply(lines){
+    const clean=(lines||[]).map(line=>normalizeSplitDecimals(line).replace(/\s+/g," ").trim());
+    const start=clean.findIndex(line=>/공급대상/.test(line)&&!/일정/.test(line));
+    if(start<0)return [];
+    const endOffset=clean.slice(start+1).findIndex(line=>/공급금액.*납부일정/.test(line));
+    const seg=clean.slice(start,endOffset>=0?start+1+endOffset:start+60);
+    const areaAt=[];
+    seg.forEach((line,index)=>{
+      for(const match of line.matchAll(/\b0?(\d{2,3})\.(\d{2,4})[A-Z]?\b/g)){
+        const area=Number(`${Number(match[1])}.${match[2]}`);
+        if(area>=20&&area<=400)areaAt.push({index,area});
+      }
+    });
+    const found=new Map();
+    seg.forEach((line,index)=>{
+      for(const match of line.matchAll(/\b(\d{2,3}[A-Z]\d*)\s+(\d{1,3})\b/g)){
+        const name=match[1],count=Number(match[2]);
+        if(count<=0||count>500)continue;
+        const base=name.match(/^\d+/)[0];
+        let best=null;
+        areaAt.forEach(item=>{
+          const distance=Math.abs(item.index-index);
+          if(String(Math.floor(item.area))===base&&distance<=3&&(!best||distance<best.distance))best={area:item.area,distance};
+        });
+        if(!best)continue;
+        if(!found.has(name))found.set(name,{name,area:best.area,total:count,agency:0,multi:0,newly:0,elder:0,first:0,baby:0,general:count});
+      }
+    });
+    return [...found.values()];
+  }
+
   function moneyValues(line){
     return [...String(line||"").matchAll(/\d{1,3}(?:,\d{3}){2,}|\b\d{8,}\b/g)]
       .map(match=>({value:Number(match[0].replace(/,/g,"")),index:match.index}))
@@ -826,6 +857,12 @@
     const p=profile.people[personKey];
     const type=profileType(profile);
     const secondAllowed=personKey!=="b"||hasSecondApplicant(profile);
+    if(notice.remainder){
+      const blocked=key=>({ok:false,reason:"무순위 공고에는 "+TYPE_LABELS[key]+" 없음"});
+      const result={agency:blocked("agency"),multi:blocked("multi"),newly:blocked("newly"),elder:blocked("elder"),first:blocked("first"),baby:blocked("baby"),
+        general:{ok:secondAllowed&&profile.reWinClean,reason:secondAllowed&&profile.reWinClean?"무순위 추첨 · 통장·가점 무관(세부 자격은 공고문 확인)":"재당첨 제한 확인 필요"}};
+      return result;
+    }
     const accountMonths=monthsBetween(p.account,notice.noticeDate);
     const marriageYears=hasLegalSpouse(profile)&&normalizeDate(profile.marriageDate)&&normalizeDate(notice.noticeDate)?yearsBetween(profile.marriageDate,notice.noticeDate):99;
     const childAge=normalizeDate(profile.youngestBirth)&&normalizeDate(notice.noticeDate)?yearsBetween(profile.youngestBirth,notice.noticeDate):99;
@@ -855,7 +892,7 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,acquisitionCostEstimate,parseSupplyRows,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);
