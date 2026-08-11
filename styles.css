@@ -561,3 +561,5 @@ label:has(.suffix) input{padding-right:42px}
   .hero-row{flex-direction:column;align-items:stretch}
   .hero-row h1{font-size:19px}
 }
+.qn-min-note{margin:8px 0 0;font-size:10px;color:var(--muted);line-height:1.5}
+.qn-min-note b{color:#8a3e00}

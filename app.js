@@ -899,18 +899,21 @@
     const groups=new Map();
     notice.sizes.forEach(size=>{
       const base=(String(size.name).match(/^\d+/)||[String(Math.floor(num(size.area))||"?")])[0];
-      if(!groups.has(base))groups.set(base,{base,total:0,min:Infinity,max:0,sum:0,n:0});
+      if(!groups.has(base))groups.set(base,{base,total:0,min:Infinity,max:0,sum:0,n:0,hasMin:false});
       const group=groups.get(base);
       group.total+=num(size.total);
       const price=notice.pricing.find(row=>row.size===size.name);
       if(price&&num(price.max)){
-        const low=num(price.min)||num(price.max);
-        group.min=Math.min(group.min,low);group.max=Math.max(group.max,num(price.max));
-        group.sum+=low+num(price.max);group.n+=2;
+        group.max=Math.max(group.max,num(price.max));
+        const low=num(price.min);
+        if(low>0){group.hasMin=true;group.min=Math.min(group.min,low);group.sum+=low+num(price.max);group.n+=2;}
       }
     });
-    const sizeRows=[...groups.values()].map(group=>`<tr><td><b>${esc(group.base)}</b><small>${group.total}세대</small></td><td>${eok(group.min===Infinity?0:group.min)}</td><td>${eok(group.n?group.sum/group.n:0)}</td><td>${eok(group.max)}</td></tr>`).join("");
+    const groupList=[...groups.values()];
+    const minUnknown=groupList.some(group=>group.max&&!group.hasMin);
+    const sizeRows=groupList.map(group=>`<tr><td><b>${esc(group.base)}</b><small>${group.total}세대</small></td><td>${group.hasMin?eok(group.min):"-"}</td><td>${group.hasMin&&group.n?eok(group.sum/group.n):"-"}</td><td>${eok(group.max)}</td></tr>`).join("");
     const priceTable=sizeRows?`<table class="qn-table"><thead><tr><th>평형</th><th>최저</th><th>평균</th><th>최고</th></tr></thead><tbody>${sizeRows}</tbody></table>`:"";
+    const minNote=minUnknown?`<p class="qn-min-note">청약홈 API는 주택형별 <b>최고 분양가만</b> 제공합니다. 층별 최저가·평균은 공고문 PDF를 업로드하면 채워집니다.</p>`:"";
     const fmtDate=value=>{const date=R.normalizeDate(value);return date?`${date.slice(2,4)}.${Number(date.slice(5,7))}`:""};
     const milestones=(notice.payments||[]).filter(row=>row.kind!=="other").map(row=>({
       label:row.kind==="contract"?(row.label.includes("차")?row.label.replace("계약금 ","계약"):"계약"):row.kind==="interim"?row.label.replace("중도금 ","중").replace("차",""):"잔금",
@@ -918,7 +921,7 @@
       date:fmtDate(row.dueDate)||(row.kind==="contract"?fmtDate(notice.expectedContractDate)||"계약시":row.kind==="balance"?fmtDate(notice.expectedMoveInDate)||"입주":"?")
     }));
     const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><small>${esc(m.date)}</small><span>${esc(m.label)}</span><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b></div>`).join("")}</div>`:"";
-    el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
+    el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);
@@ -1174,7 +1177,7 @@
         const general=num(m.SUPLY_HSHLDCO),special=num(m.SPSPLY_HSHLDCO);
         return {name:typeName(m.HOUSE_TY),area:parseFloat(String(m.HOUSE_TY).trim())||num(m.SUPLY_AR)||0,total:general+special,agency:num(m.INSTT_RECOMEND_HSHLDCO),multi:num(m.MNYCH_HSHLDCO),newly:num(m.NWWDS_HSHLDCO),elder:num(m.OLD_PARNTS_SUPORT_HSHLDCO),first:num(m.LFE_FRST_HSHLDCO),baby:num(m.NWBB_HSHLDCO),general};
       });
-      const pricing=mdl.map(m=>({size:typeName(m.HOUSE_TY),min:num(m.LTTOT_TOP_AMOUNT)*10000,max:num(m.LTTOT_TOP_AMOUNT)*10000,options:[]}));
+      const pricing=mdl.map(m=>({size:typeName(m.HOUSE_TY),min:0,max:num(m.LTTOT_TOP_AMOUNT)*10000,options:[]}));
       const contractDate=R.normalizeDate(applyhomeVal(detail,"CNTRCT_CNCLS_BGNDE"));
       const moveInRaw=String(applyhomeVal(detail,"MVN_PREARNGE_YM"));
       const moveInDate=moveInRaw.length===6?`${moveInRaw.slice(0,4)}-${moveInRaw.slice(4)}-01`:"";
