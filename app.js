@@ -909,15 +909,16 @@
         group.sum+=low+num(price.max);group.n+=2;
       }
     });
-    const sizeRows=[...groups.values()].map(group=>`<div class="qn-size"><b>${esc(group.base)}</b><span>${group.total}세대</span><i>최저 ${eok(group.min===Infinity?0:group.min)}</i><i>평균 ${eok(group.n?group.sum/group.n:0)}</i><i>최고 ${eok(group.max)}</i></div>`).join("");
+    const sizeRows=[...groups.values()].map(group=>`<tr><td><b>${esc(group.base)}</b><small>${group.total}세대</small></td><td>${eok(group.min===Infinity?0:group.min)}</td><td>${eok(group.n?group.sum/group.n:0)}</td><td>${eok(group.max)}</td></tr>`).join("");
+    const priceTable=sizeRows?`<table class="qn-table"><thead><tr><th>평형</th><th>최저</th><th>평균</th><th>최고</th></tr></thead><tbody>${sizeRows}</tbody></table>`:"";
     const fmtDate=value=>{const date=R.normalizeDate(value);return date?`${date.slice(2,4)}.${Number(date.slice(5,7))}`:""};
     const milestones=(notice.payments||[]).filter(row=>row.kind!=="other").map(row=>({
       label:row.kind==="contract"?(row.label.includes("차")?row.label.replace("계약금 ","계약"):"계약"):row.kind==="interim"?row.label.replace("중도금 ","중").replace("차",""):"잔금",
       rate:num(row.rate),
       date:fmtDate(row.dueDate)||(row.kind==="contract"?fmtDate(notice.expectedContractDate)||"계약시":row.kind==="balance"?fmtDate(notice.expectedMoveInDate)||"입주":"?")
     }));
-    const timeline=milestones.length?`<div class="qn-timeline">${milestones.map(m=>`<div class="qn-mile"><i></i><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b><span>${esc(m.label)}</span><small>${esc(m.date)}</small></div>`).join("")}</div>`:"";
-    el.innerHTML=sizeRows||timeline?`${sizeRows?`<div class="qn-sizes">${sizeRows}</div>`:""}${timeline}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
+    const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b><span>${esc(m.label)}</span><small>${esc(m.date)}</small></div>`).join("")}</div>`:"";
+    el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);

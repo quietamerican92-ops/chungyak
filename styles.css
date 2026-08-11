@@ -515,3 +515,37 @@ label:has(.suffix) input{padding-right:42px}
 .compare-info-title{margin:16px 0 8px;font-size:14px}
 .compare-info td,.compare-info th{font-size:11px;white-space:normal;vertical-align:top}
 .compare-info th{min-width:120px}
+
+/* Header 2.1: 모바일에서도 제목+배너 한 줄 유지, PDF 버튼 소형 유지, 가격표+세로 마일스톤 */
+.qn-flex{display:flex;gap:14px;align-items:flex-start}
+.qn-table{width:auto;flex:1;min-width:0;border-collapse:collapse}
+.qn-table th{font-size:10px;padding:6px 8px;background:#f1f4f1}
+.qn-table td{font-size:12px;padding:7px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.qn-table td:first-child{text-align:left}
+.qn-table td b{font-size:14px;color:var(--green);margin-right:4px}
+.qn-table td small{font-size:9px;color:var(--muted);font-weight:700}
+.qn-vtimeline{flex:none;display:flex;flex-direction:column;padding-left:6px;position:relative}
+.qn-vtimeline::before{content:"";position:absolute;left:10px;top:8px;bottom:8px;width:2px;background:#cfdccf}
+.qn-vmile{display:flex;align-items:center;gap:7px;padding:3px 0;position:relative}
+.qn-vmile i{width:9px;height:9px;border-radius:50%;background:var(--green);border:2px solid #fff;box-shadow:0 0 0 1px #cfdccf;z-index:1;flex:none}
+.qn-vmile b{font-size:11px;min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+.qn-vmile span{font-size:10px;font-weight:900;color:var(--muted);min-width:26px}
+.qn-vmile small{font-size:10px;color:var(--green);font-weight:800;font-variant-numeric:tabular-nums}
+@media(max-width:900px){
+  .hero-row{flex-direction:row;align-items:center;gap:8px}
+  .hero-row h1{font-size:14px;letter-spacing:-.03em}
+  .live-banner-main{font-size:10px;padding:7px 8px;gap:6px}
+  .live-banner-toggle{padding:0 9px;font-size:15px}
+  .hero-inner{padding:10px 12px 9px}
+  .current-notice-chip{margin-top:7px;font-size:12px;padding:5px 11px}
+}
+@media(max-width:760px){
+  .quick-pdf-row{flex-direction:row;align-items:center;justify-content:space-between}
+  .quick-pdf-row .file-button-sm{width:auto;font-size:12px;padding:8px 12px;text-align:center}
+  .qn-flex{gap:10px}
+  .qn-table td{font-size:11px;padding:6px 6px}
+  .qn-table td b{font-size:13px}
+}
+.hero-row .live-banner{min-width:0}
+.live-banner-main{min-width:0;overflow:hidden}
+.live-banner-toggle{flex:none}
