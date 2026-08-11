@@ -397,7 +397,7 @@
     else if(/경기도\s*\d+년\s*이상/.test(text))priorityRegion="경기도";
     const yearMatch=text.match(new RegExp((priorityRegion||"해당지역").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*(\\d+)년\\s*이상"));
     let sizes=R.parseSupplyRows(lines);
-    const remainder=/무순위|잔여세대|임의공급/.test(text)&&/무순위|잔여세대/.test(projectName+" "+fileName+" "+text.slice(0,3000));
+    const remainder=/무순위|잔여세대|사후\s*접수|계약취소|임의공급/.test(projectName+" "+fileName);
     if(!sizes.length&&remainder)sizes=R.parseRemainderSupply(lines);
     const isPrivate=/민영/.test(text)||/민간택지/.test(text);
     const overheated=/투기과열지구/.test(text);
@@ -410,12 +410,13 @@
     const interimPlan=R.parseInterimLoanPlan(text,payments);
     const moveInMatch=text.match(/입주시기\s*:\s*(20\d{2})년\s*(\d{1,2})월/);
     const monthReqs=[...text.matchAll(/가입[^0-9]{0,60}?(\d{1,2})\s*개월/g)].map(match=>num(match[1])).filter(value=>[1,3,6,12,24].includes(value));
-    const manageRow=text.match(/\b(20\d{8})\b\s+\d{2}\s+0?\d{2,3}\.\d{2,4}/);
-    const manageContext=text.match(/주택\s*관리\s*번호[\s\S]{0,2500}?\b(20\d{8})\b/);
-    const manageFile=fileName.match(/\b(20\d{8})\b/);
+    const joinNo=match=>match?match[1]+match[2]:"";
+    const manageRow=joinNo(text.match(/\b(20\d{2})-?(\d{6})\b\s+\d{2}\s+0?\d{2,3}\.\d{2,4}/));
+    const manageContext=joinNo(text.match(/주택\s*관리\s*번호[\s\S]{0,2500}?\b(20\d{2})-?(\d{6})\b/));
+    const manageFile=joinNo(fileName.match(/\b(20\d{2})-?(\d{6})\b/));
     const announceMatch=text.match(/당첨자\s*발표[^0-9]{0,40}?(20\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
     return {
-      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow?.[1]||manageContext?.[1]||manageFile?.[1]||"",announceDate:announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):"",remainder,
+      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow||manageContext||manageFile||"",announceDate:announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):"",remainder,
       housingType:isPrivate?"private":/국민주택|공공주택/.test(text)?"public":"unsupported",
       priorityRegion,priorityYears:yearMatch?num(yearMatch[1]):0,specialMonths:monthReqs.length?Math.min(...monthReqs):6,
       generalMonths:monthReqs.length?Math.max(...monthReqs):24,generalHeadRequired:overheated||adjusted?"yes":"no",pointRates:rates,verified:false,
@@ -891,10 +892,22 @@
   function updateNoticeChip(){
     if($("currentNoticeChip"))$("currentNoticeChip").textContent="📌 "+(notice.projectName||"공고를 선택하세요")+(notice.remainder?" · 무순위":"");
   }
+  function noticePblancUrl(){
+    if(notice.pblancUrl)return notice.pblancUrl;
+    const no=String(notice.houseManageNo||"").trim();
+    if(!/^20\d{8}$/.test(no))return "";
+    return `https://www.applyhome.co.kr/ai/aia/select${notice.remainder?"APTRemndrLttotPblancDetailView":"APTLttotPblancDetailView"}.do?houseManageNo=${no}&pblancNo=${no}`;
+  }
   function renderQuickNoticeSummary(){
     const el=$("quickNoticeSummary");
     if(!el)return;
     normalizeNoticeFinance(notice);
+    const pblanc=$("openPblanc");
+    if(pblanc){
+      const url=noticePblancUrl();
+      pblanc.classList.toggle("is-hidden",!url);
+      if(url)pblanc.href=url;
+    }
     const eok=value=>value?`${(value/1e8).toFixed(1).replace(/\.0$/,"")}억`:"-";
     const groups=new Map();
     notice.sizes.forEach(size=>{
@@ -1197,6 +1210,7 @@
         noticeDate:R.normalizeDate(applyhomeVal(detail,"RCRIT_PBLANC_DE")),location:String(applyhomeVal(detail,"HSSPLY_ADRES")),
         announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
         rceptStart:R.normalizeDate(applyhomeVal(detail,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),rceptEnd:R.normalizeDate(applyhomeVal(detail,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),
+        pblancUrl:String(applyhomeVal(detail,"PBLANC_URL")||""),
         housingType:"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
         specialMonths:6,generalMonths:remainder?0:24,generalHeadRequired:remainder?"no":overheated||adjusted?"yes":"no",
         pointRates:remainder?{small:0,medium:0,large:0}:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
