@@ -498,11 +498,14 @@
       if(!line)return;
       if(/^__PAGE_\d+__$/.test(line)){category="";headerLine=-999;currentSizes=[];matrixSizes=[];return}
       const foundCategory=optionCategory(line);
-      if(foundCategory){category=foundCategory;headerLine=lineIndex;currentSizes=[];matrixSizes=[]}
+      if(foundCategory){
+        category=foundCategory;headerLine=lineIndex;
+        if(!optionMoneyValues(line).length){currentSizes=[];matrixSizes=[]}
+      }
       if(!category||lineIndex-headerLine>220||reject.test(line))return;
       const mentioned=optionSizeNames(line,sizes);
       const money=optionMoneyValues(line);
-      if(mentioned.length&&money.length===0){currentSizes=mentioned;matrixSizes=mentioned.length>1?mentioned:matrixSizes;return}
+      if(mentioned.length&&money.length===0){currentSizes=mentioned;if(mentioned.length>1&&mentioned.length>=matrixSizes.length)matrixSizes=mentioned;return}
       if(mentioned.length)currentSizes=mentioned;
       if(!money.length)return;
       const total=optionTotal(line);

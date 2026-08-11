@@ -19,14 +19,15 @@
   <header class="hero">
     <div class="hero-inner">
       <div class="hero-copy">
-        <div class="eyebrow">민영주택 · 가구 통합 분석</div>
-        <h1>우리집 청약 전략실</h1>
-        <div id="liveBanner" class="live-banner">
-          <button id="liveBannerMain" class="live-banner-main" type="button"><span class="live-dot"></span><span id="liveBannerText">서울·경기 실시간 공고 불러오는 중…</span></button>
-          <button id="liveBannerToggle" class="live-banner-toggle" type="button" aria-label="전체 공고 목록 열기">▾</button>
-          <div id="liveBannerList" class="live-banner-list is-hidden"></div>
+        <div class="hero-row">
+          <h1>우리집 청약 전략실</h1>
+          <div id="liveBanner" class="live-banner">
+            <button id="liveBannerMain" class="live-banner-main" type="button"><span class="live-dot"></span><span id="liveBannerText">서울·경기 실시간 공고 불러오는 중…</span></button>
+            <button id="liveBannerToggle" class="live-banner-toggle" type="button" aria-label="전체 공고 목록 열기">▾</button>
+            <div id="liveBannerList" class="live-banner-list is-hidden"></div>
+          </div>
         </div>
-        <p class="hero-sub">가구 정보는 한 번 저장하고, 모집공고만 바꿔 청약 전략과 자금일정까지 다시 계산합니다.</p>
+        <div id="currentNoticeChip" class="current-notice-chip"></div>
       </div>
     </div>
   </header>
@@ -40,10 +41,11 @@
 
       <article class="card quick-card quick-pdf-card">
         <div class="quick-pdf-row">
-          <div><h3><span class="quick-step">1</span> 모집공고</h3><p class="quick-pdf-copy">현재 공고: <b id="quickNoticeName"></b></p></div>
-          <label class="file-button">공고 PDF 업로드<input id="quickPdfFile" type="file" accept="application/pdf,.pdf"></label>
+          <h3><span class="quick-step">1</span> 모집공고</h3>
+          <label class="file-button file-button-sm">PDF 업로드<input id="quickPdfFile" type="file" accept="application/pdf,.pdf"></label>
         </div>
         <div id="quickParseStatus" class="quick-parse-status"></div>
+        <div id="quickNoticeSummary" class="quick-notice-summary"></div>
       </article>
 
       <article class="card quick-card">

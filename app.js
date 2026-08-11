@@ -299,6 +299,8 @@
     renderPaymentNotice();
     renderFinanceControls();
     renderExpectations();
+    updateNoticeChip();
+    renderQuickNoticeSummary();
     $("verifiedBadge").className="badge "+(notice.verified?"ok":"warn");
     $("verifiedBadge").textContent=notice.verified?"검수 완료":"검수 필요";
     refreshLibrary();
@@ -882,8 +884,40 @@
     $("quickNeverHome").checked=$("neverHome").checked;
     $("quickHead").checked=$("aHead").checked;
     updateQuickVisibility();
-    $("quickNoticeName").textContent=notice.projectName||"공고 없음";
+    updateNoticeChip();
+    renderQuickNoticeSummary();
     setupMoneyInputs($("quick"));
+  }
+  function updateNoticeChip(){
+    if($("currentNoticeChip"))$("currentNoticeChip").textContent="📌 "+(notice.projectName||"공고를 선택하세요")+(notice.remainder?" · 무순위":"");
+  }
+  function renderQuickNoticeSummary(){
+    const el=$("quickNoticeSummary");
+    if(!el)return;
+    normalizeNoticeFinance(notice);
+    const eok=value=>value?`${(value/1e8).toFixed(1).replace(/\.0$/,"")}억`:"-";
+    const groups=new Map();
+    notice.sizes.forEach(size=>{
+      const base=(String(size.name).match(/^\d+/)||[String(Math.floor(num(size.area))||"?")])[0];
+      if(!groups.has(base))groups.set(base,{base,total:0,min:Infinity,max:0,sum:0,n:0});
+      const group=groups.get(base);
+      group.total+=num(size.total);
+      const price=notice.pricing.find(row=>row.size===size.name);
+      if(price&&num(price.max)){
+        const low=num(price.min)||num(price.max);
+        group.min=Math.min(group.min,low);group.max=Math.max(group.max,num(price.max));
+        group.sum+=low+num(price.max);group.n+=2;
+      }
+    });
+    const sizeRows=[...groups.values()].map(group=>`<div class="qn-size"><b>${esc(group.base)}</b><span>${group.total}세대</span><i>최저 ${eok(group.min===Infinity?0:group.min)}</i><i>평균 ${eok(group.n?group.sum/group.n:0)}</i><i>최고 ${eok(group.max)}</i></div>`).join("");
+    const fmtDate=value=>{const date=R.normalizeDate(value);return date?`${date.slice(2,4)}.${Number(date.slice(5,7))}`:""};
+    const milestones=(notice.payments||[]).filter(row=>row.kind!=="other").map(row=>({
+      label:row.kind==="contract"?(row.label.includes("차")?row.label.replace("계약금 ","계약"):"계약"):row.kind==="interim"?row.label.replace("중도금 ","중").replace("차",""):"잔금",
+      rate:num(row.rate),
+      date:fmtDate(row.dueDate)||(row.kind==="contract"?fmtDate(notice.expectedContractDate)||"계약시":row.kind==="balance"?fmtDate(notice.expectedMoveInDate)||"입주":"?")
+    }));
+    const timeline=milestones.length?`<div class="qn-timeline">${milestones.map(m=>`<div class="qn-mile"><i></i><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b><span>${esc(m.label)}</span><small>${esc(m.date)}</small></div>`).join("")}</div>`:"";
+    el.innerHTML=sizeRows||timeline?`${sizeRows?`<div class="qn-sizes">${sizeRows}</div>`:""}${timeline}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);
@@ -1158,6 +1192,7 @@
         id:existingId||"applyhome-"+house,houseManageNo:String(house),projectName:String(applyhomeVal(detail,"HOUSE_NM")),
         noticeDate:R.normalizeDate(applyhomeVal(detail,"RCRIT_PBLANC_DE")),location:String(applyhomeVal(detail,"HSSPLY_ADRES")),
         announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
+        rceptStart:R.normalizeDate(applyhomeVal(detail,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),rceptEnd:R.normalizeDate(applyhomeVal(detail,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),
         housingType:"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
         specialMonths:6,generalMonths:remainder?0:24,generalHeadRequired:remainder?"no":overheated||adjusted?"yes":"no",
         pointRates:remainder?{small:0,medium:0,large:0}:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
@@ -1262,7 +1297,38 @@
     }else{
       verdict+=`발표일이 서로 달라 전부 신청할 수 있습니다. 단 <b>발표일이 빠른 단지에 당첨되면 늦은 단지의 당첨은 자동 취소</b>되므로, 더 원하는 단지의 발표가 늦다면 앞 단지는 '당첨돼도 계약할 단지'인지 확인 후 넣으세요. 종합 우선순위: ${results.map((row,index)=>`<b>${index+1}. ${esc(row.name)}</b>`).join(" → ")}`;
     }
-    $("compareResult").innerHTML=`<div class="compare-verdict">${verdict}</div><div class="table-wrap"><table><thead><tr><th>단지</th><th>당첨자 발표일</th><th>내 최선 신청</th><th>자금 판정</th></tr></thead><tbody>${rowsHtml}</tbody></table><p class="hint">순위 = 당첨확률(경쟁률·커트라인 입력 시) 또는 전략지수 기준. 규정 근거: 주택공급규칙 — 동일 발표일 주택 1인 1건, 부부 각자 신청 가능, 부부 중복당첨 시 접수 빠른 건 유효.</p>`;
+    const infoNotices=ids.map(id=>notices[id]).filter(Boolean);
+    const eok=value=>value?`${(value/1e8).toFixed(1).replace(/\.0$/,"")}억`:"-";
+    const mmdd=value=>{const d=R.normalizeDate(value);return d?d.slice(2).replaceAll("-","."):"-"};
+    const priceGroups=n=>{
+      const groups=new Map();
+      (n.sizes||[]).forEach(size=>{
+        const base=(String(size.name).match(/^\d+/)||["?"])[0];
+        const price=(n.pricing||[]).find(row=>row.size===size.name);
+        if(!price||!num(price.max))return;
+        if(!groups.has(base))groups.set(base,{min:Infinity,max:0});
+        const g=groups.get(base);g.min=Math.min(g.min,num(price.min)||num(price.max));g.max=Math.max(g.max,num(price.max));
+      });
+      return [...groups.entries()].map(([base,g])=>`${base}: ${g.min===g.max?eok(g.max):`${eok(g.min)}~${eok(g.max)}`}`).join("<br>")||"-";
+    };
+    const paySummary=n=>{
+      const pays=(n.payments||[]).filter(row=>row.kind!=="other");
+      if(!pays.length)return "-";
+      const total=kind=>Math.round(pays.filter(row=>row.kind===kind).reduce((sum,row)=>sum+num(row.rate),0));
+      const interimCount=pays.filter(row=>row.kind==="interim").length;
+      const first=pays.find(row=>row.kind==="interim"&&row.dueDate);
+      return `계약 ${total("contract")}% · 중도금 ${total("interim")}%(${interimCount}회${first?` · ${mmdd(first.dueDate)}~`:""}) · 잔금 ${total("balance")}%`;
+    };
+    const infoFields=[
+      ["접수기간",n=>n.rceptStart?`${mmdd(n.rceptStart)}~${mmdd(n.rceptEnd)}`:"-"],
+      ["당첨자 발표",n=>mmdd(n.announceDate)],
+      ["계약",n=>mmdd(n.expectedContractDate)],
+      ["입주 예정",n=>esc(n.expectedMoveInLabel||"-")],
+      ["평형별 분양가",n=>priceGroups(n)],
+      ["납부 일정",n=>esc(paySummary(n))]
+    ];
+    const infoTable=`<div class="table-wrap"><table class="compare-info"><thead><tr><th></th>${infoNotices.map(n=>`<th>${esc(n.projectName||"-")}${n.remainder?' <i class="live-kind">무순위</i>':""}</th>`).join("")}</tr></thead><tbody>${infoFields.map(([label,fn])=>`<tr><td><b>${label}</b></td>${infoNotices.map(n=>`<td>${fn(n)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    $("compareResult").innerHTML=`<div class="compare-verdict">${verdict}</div><div class="table-wrap"><table><thead><tr><th>단지</th><th>당첨자 발표일</th><th>내 최선 신청</th><th>자금 판정</th></tr></thead><tbody>${rowsHtml}</tbody></table><h4 class="compare-info-title">공고 정보 비교</h4>${infoTable}<p class="hint">순위 = 당첨확률(경쟁률·커트라인 입력 시) 또는 전략지수 기준. 규정 근거: 주택공급규칙 — 동일 발표일 주택 1인 1건, 부부 각자 신청 가능, 부부 중복당첨 시 접수 빠른 건 유효.</p>`;
   }
   function calculate(){
     renderProfileSummary();saveProfile();
