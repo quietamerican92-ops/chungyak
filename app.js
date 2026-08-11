@@ -917,7 +917,7 @@
       rate:num(row.rate),
       date:fmtDate(row.dueDate)||(row.kind==="contract"?fmtDate(notice.expectedContractDate)||"계약시":row.kind==="balance"?fmtDate(notice.expectedMoveInDate)||"입주":"?")
     }));
-    const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b><span>${esc(m.label)}</span><small>${esc(m.date)}</small></div>`).join("")}</div>`:"";
+    const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><small>${esc(m.date)}</small><span>${esc(m.label)}</span><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b></div>`).join("")}</div>`:"";
     el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
   }
   function setUiMode(simple,panel){

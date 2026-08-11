@@ -549,3 +549,15 @@ label:has(.suffix) input{padding-right:42px}
 .hero-row .live-banner{min-width:0}
 .live-banner-main{min-width:0;overflow:hidden}
 .live-banner-toggle{flex:none}
+
+/* Header 2.2: 제목/배너 두 줄 복귀 + 마일스톤 순서 (날짜→라벨→%) */
+.hero-row{flex-direction:column;align-items:stretch;gap:9px}
+.hero-row h1{font-size:22px}
+.hero-row .live-banner{max-width:640px}
+.qn-vmile small{min-width:36px;text-align:left}
+.qn-vmile span{min-width:26px}
+.qn-vmile b{min-width:0;text-align:left}
+@media(max-width:900px){
+  .hero-row{flex-direction:column;align-items:stretch}
+  .hero-row h1{font-size:19px}
+}
