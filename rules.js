@@ -877,7 +877,7 @@
     if(!headOk)firstRankMissing.push("세대주 아님(규제지역은 세대주만 1순위)");
     if(!profile.reWinClean)firstRankMissing.push("재당첨 제한 체크 해제됨");
     if(!p.deposit)firstRankMissing.push("예치금 체크 해제됨");
-    if(accountMonths<generalMonthsRequired)firstRankMissing.push(`통장 ${Math.floor(accountMonths)}개월/${generalMonthsRequired}개월 필요`);
+    if(accountMonths<generalMonthsRequired)firstRankMissing.push(`통장 ${Math.floor(accountMonths)}개월/${generalMonthsRequired}개월 필요 (가입일 ${normalizeDate(p.account)||"미입력"} → 공고일 ${normalizeDate(notice.noticeDate)||"미입력"} 기준)`);
     const firstRank=secondAllowed&&firstRankMissing.length===0;
     const registeredUnmarriedChild=integer(profile.children)>0&&Boolean(profile.unmarriedChildRegistered);
     const normalFirstHome=hasLegalSpouse(profile)||registeredUnmarriedChild;

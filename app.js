@@ -880,7 +880,11 @@
     const family=["single","married","single_parent"].includes(type)?type:"single";
     const radio=document.querySelector(`input[name="quickFamily"][value="${family}"]`);
     if(radio)radio.checked=true;
-    QUICK_FIELD_MAP.forEach(([from,to])=>{if($(to)&&$(from))$(from).value=$(to).value});
+    QUICK_FIELD_MAP.forEach(([from,to])=>{
+      if(!$(to)||!$(from))return;
+      const current=String($(from).value||"").trim();
+      if(current===""||current==="0")$(from).value=$(to).value;
+    });
     $("quickNoHome").checked=$("noHome").checked;
     $("quickNeverHome").checked=$("neverHome").checked;
     $("quickHead").checked=$("aHead").checked;
@@ -1261,7 +1265,7 @@
         expectedContractDate:contractDate,expectedMoveInDate:moveInDate,expectedMoveInLabel:moveInRaw.length===6?`${moveInRaw.slice(0,4)}년 ${moveInRaw.slice(4)}월 예정`:"",expectations:{}
       };
       $("planPrice").value="";
-      saveCurrentNotice(false);renderNotice();initQuickFromDetail();calculate();
+      saveCurrentNotice(false);renderNotice();initQuickFromDetail();syncQuickToDetail();calculate();
       $("liveBannerList").classList.add("is-hidden");
       applyModelPrediction(true);
       if(document.body.classList.contains("simple-mode")){setPanel("quick");if($("quickResult").innerHTML)renderQuickResult()}
@@ -1475,6 +1479,7 @@
       $("parseStatus").textContent=message;
       $("quickParseStatus").textContent=message;
       initQuickFromDetail();
+      syncQuickToDetail();
       calculate();
       applyModelPrediction(true);
       if(document.body.classList.contains("simple-mode")&&$("quickResult").innerHTML)renderQuickResult();
