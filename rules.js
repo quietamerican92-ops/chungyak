@@ -872,7 +872,13 @@
     const specialChildren=specialChildCount(profile);
     const base=secondAllowed&&profile.noHome&&profile.specialClean&&profile.reWinClean&&p.deposit;
     const headOk=notice.generalHeadRequired==="no"||p.head;
-    const firstRank=secondAllowed&&headOk&&profile.reWinClean&&p.deposit&&accountMonths>=Number(notice.generalMonths||24);
+    const generalMonthsRequired=Number(notice.generalMonths||24);
+    const firstRankMissing=[];
+    if(!headOk)firstRankMissing.push("세대주 아님(규제지역은 세대주만 1순위)");
+    if(!profile.reWinClean)firstRankMissing.push("재당첨 제한 체크 해제됨");
+    if(!p.deposit)firstRankMissing.push("예치금 체크 해제됨");
+    if(accountMonths<generalMonthsRequired)firstRankMissing.push(`통장 ${Math.floor(accountMonths)}개월/${generalMonthsRequired}개월 필요`);
+    const firstRank=secondAllowed&&firstRankMissing.length===0;
     const registeredUnmarriedChild=integer(profile.children)>0&&Boolean(profile.unmarriedChildRegistered);
     const normalFirstHome=hasLegalSpouse(profile)||registeredUnmarriedChild;
     const singleHousehold=!hasLegalSpouse(profile)&&specialChildren===0;
@@ -884,7 +890,7 @@
       elder:{ok:base&&firstRank&&p.elder3&&p.elderNoHome,reason:p.elder3&&p.elderNoHome?"부양·무주택 확인":"노부모 3년 부양·무주택 확인 필요"},
       first:{ok:base&&firstRank&&profile.neverHome&&p.tax5&&(normalFirstHome||singleHousehold),reason:profile.neverHome&&p.tax5?(singleHousehold?(singleHouseholdAreaLimited?"1인 단독세대 · 추첨 · 60㎡ 이하":"1인 비단독세대 · 추첨공급"):!hasLegalSpouse(profile)&&specialChildren>0&&!registeredUnmarriedChild?"미혼 자녀 주민등록표 등재 필요":"생애최초·소득세 요건 확인"):"과거소유·소득세 요건 확인 필요",singleHousehold,singleHouseholdAreaLimited},
       baby:{ok:base&&firstRank&&(integer(profile.fetuses)>0||childAge<=2),reason:integer(profile.fetuses)>0?`태아 ${integer(profile.fetuses)}명`:childAge<=2?`막내 ${childAge.toFixed(1)}세`:"공고일 현재 2세 이하 자녀 또는 태아 필요"},
-      general:{ok:firstRank,reason:firstRank?"민영주택 1순위 입력요건 충족":"세대주·통장기간·예치금·당첨제한 확인"}
+      general:{ok:firstRank,reason:firstRank?"민영주택 1순위 입력요건 충족":firstRankMissing.join(" · ")||"현재 프로필에는 법적 배우자 B가 없음"}
     };
     if(!secondAllowed){Object.values(result).forEach(item=>{item.ok=false;item.reason="현재 프로필에는 법적 배우자 B가 없음"});}
     ["newly","first","baby"].forEach(supplyType=>{
