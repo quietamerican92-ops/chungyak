@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-8">
+  <link rel="stylesheet" href="./styles.css?v=20260810-9">
 </head>
 <body>
   <header class="hero">
@@ -71,6 +71,8 @@
           <label id="quickAccountBField" class="is-hidden">배우자 통장 가입일<input id="quickAccountB" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
           <label>미성년 자녀 수<input id="quickChildren" type="number" min="0" value="0"></label>
           <label>임신 중 태아 수<input id="quickFetuses" type="number" min="0" value="0"></label>
+          <label>만 6세 미만 자녀 수<input id="quickInfants" type="number" min="0" value="0"><small class="field-help">태아 제외 · 다자녀 영유아 배점용</small></label>
+          <label>막내 출생일<input id="quickYoungest" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"><small class="field-help">신생아 특공(2세 미만) 판정용</small></label>
           <label>현재 거주 시·도<input id="quickRegion" value="서울특별시"></label>
           <label>그 지역 거주 시작일<input id="quickResidence" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
         </div>
@@ -512,8 +514,8 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-8"></script>
-  <script src="./model-data.js?v=20260810-8"></script>
-  <script src="./app.js?v=20260810-8"></script>
+  <script src="./rules.js?v=20260810-9"></script>
+  <script src="./model-data.js?v=20260810-9"></script>
+  <script src="./app.js?v=20260810-9"></script>
 </body>
 </html>

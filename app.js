@@ -850,7 +850,7 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"]];
+  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
