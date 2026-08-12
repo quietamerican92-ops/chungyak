@@ -935,6 +935,27 @@
     }));
     const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><small>${esc(m.date)}</small><span>${esc(m.label)}</span><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b></div>`).join("")}</div>`:"";
     el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
+    renderQuickSupplyTable();
+  }
+  function renderQuickSupplyTable(){
+    const el=$("quickSupplyTable");
+    if(!el)return;
+    if(!Array.isArray(notice.sizes)||!notice.sizes.length){el.innerHTML=`<p class="muted">공고를 불러오면 주택형별 특공·일반 물량이 표시됩니다.</p>`;return}
+    const stageCell=value=>{
+      const count=num(value);
+      if(!count)return "-";
+      const alloc=R.specialAllocation(count);
+      return `${count}<small class="qs-stage">${alloc.stage1}·${alloc.stage2}·${alloc.stage3}</small>`;
+    };
+    const totals={agency:0,multi:0,newly:0,elder:0,first:0,baby:0,special:0,point:0,lottery:0,total:0};
+    const rows=notice.sizes.map(size=>{
+      const alloc=R.generalAllocation(num(size.general),num(size.area),notice.pointRates);
+      const special=num(size.total)-num(size.general);
+      totals.agency+=num(size.agency);totals.multi+=num(size.multi);totals.newly+=num(size.newly);totals.elder+=num(size.elder);totals.first+=num(size.first);totals.baby+=num(size.baby);
+      totals.special+=special;totals.point+=alloc.point;totals.lottery+=alloc.lottery;totals.total+=num(size.total);
+      return `<tr><td><b>${esc(size.name)}</b></td><td>${num(size.agency)||"-"}</td><td>${num(size.multi)||"-"}</td><td>${stageCell(size.newly)}</td><td>${num(size.elder)||"-"}</td><td>${stageCell(size.first)}</td><td>${stageCell(size.baby)}</td><td class="qs-sum">${special||"-"}</td><td>${alloc.point||"-"}</td><td>${alloc.lottery||"-"}</td><td class="qs-sum">${num(size.total)}</td></tr>`;
+    }).join("");
+    el.innerHTML=`<table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table><p class="hint qs-hint">신혼·생애최초·신생아 칸의 작은 숫자는 소득단계 배분(우선 50%·일반 20%·추첨)이며, 미달 시 다음 단계로 이월됩니다. 가점·추첨은 일반공급 물량을 이 공고의 가점비율로 나눈 값입니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);

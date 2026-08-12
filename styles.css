@@ -566,3 +566,12 @@ label:has(.suffix) input{padding-right:42px}
 .quick-pdf-actions{display:flex;gap:8px;align-items:center}
 .pblanc-link{display:inline-block;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--green);font-size:12px;font-weight:900;text-decoration:none;white-space:nowrap}
 .pblanc-link:hover{background:#f4f8f4}
+.qs-table{width:100%;border-collapse:collapse;min-width:560px}
+.qs-table th{font-size:9px;padding:6px 5px;background:#f1f4f1;white-space:nowrap}
+.qs-table td{font-size:11px;padding:6px 5px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.qs-table td:first-child{text-align:left}
+.qs-table td b{font-size:12px;color:var(--green)}
+.qs-table .qs-sum{font-weight:900;background:#f8faf7}
+.qs-stage{display:block;font-size:8px;color:var(--muted);font-weight:700}
+.qs-table tfoot td{font-weight:900;background:#f3f7f2}
+.qs-hint{margin-top:9px;font-size:10px}

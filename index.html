@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-3">
+  <link rel="stylesheet" href="./styles.css?v=20260810-4">
 </head>
 <body>
   <header class="hero">
@@ -52,7 +52,12 @@
       </article>
 
       <article class="card quick-card">
-        <h3><span class="quick-step">2</span> 나와 가족</h3>
+        <h3><span class="quick-step">2</span> 타입별·유형별 물량</h3>
+        <div id="quickSupplyTable" class="table-wrap"></div>
+      </article>
+
+      <article class="card quick-card">
+        <h3><span class="quick-step">3</span> 나와 가족</h3>
         <div class="quick-options">
           <label><input type="radio" name="quickFamily" value="single" checked><span><b>미혼·자녀 없음</b><small>1인 가구</small></span></label>
           <label><input type="radio" name="quickFamily" value="married"><span><b>법률혼 부부</b><small>혼인신고 완료</small></span></label>
@@ -77,7 +82,7 @@
       </article>
 
       <article class="card quick-card">
-        <h3><span class="quick-step">3</span> 소득과 자금</h3>
+        <h3><span class="quick-step">4</span> 소득과 자금</h3>
         <div class="form-grid quick-grid">
           <label>내 월소득(세전)<input id="quickIncomeA" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label id="quickIncomeBField" class="is-hidden">배우자 월소득(세전)<input id="quickIncomeB" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
@@ -507,8 +512,8 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-3"></script>
-  <script src="./model-data.js?v=20260810-3"></script>
-  <script src="./app.js?v=20260810-3"></script>
+  <script src="./rules.js?v=20260810-4"></script>
+  <script src="./model-data.js?v=20260810-4"></script>
+  <script src="./app.js?v=20260810-4"></script>
 </body>
 </html>
