@@ -991,12 +991,31 @@
     const profile=profileData();
     const aRows=candidateRows("a",profile),bRows=R.hasSecondApplicant(profile)?candidateRows("b",profile):[];
     const plans=buildPlans(aRows,bRows,profile);
+    const eligA=R.eligibility("a",profile,notice);
+    const eligB=R.hasSecondApplicant(profile)?R.eligibility("b",profile,notice):null;
+    const dualOff=!$("allowSpecialGeneral").checked;
+    const specialTypes=["newly","first","baby","multi","elder","agency"];
+    const whySpecial=(elig,counterpart)=>{
+      if(notice.remainder)return "무순위 공고에는 특별공급이 없습니다.";
+      if(dualOff&&counterpart)return "특공+일반 동시신청 옵션이 꺼져 있어 1장만 추천했습니다. 상세 모드 → 전략 설정에서 켤 수 있습니다.";
+      const okTypes=specialTypes.filter(type=>elig[type]?.ok);
+      if(!okTypes.length){
+        const first=specialTypes.map(type=>elig[type]).find(item=>item&&!item.ok);
+        return `특공 자격 미충족 — ${first?.reason||"공고문 확인"}`;
+      }
+      return `자격 있는 특공(${okTypes.map(type=>R.TYPE_LABELS[type]).join("·")})에 진입 가능한 물량이 없거나 면적 조건에서 제외됐습니다.`;
+    };
+    const whyGeneral=(elig,counterpart)=>{
+      if(dualOff&&counterpart)return "특공+일반 동시신청 옵션이 꺼져 있어 1장만 추천했습니다. 상세 모드 → 전략 설정에서 켤 수 있습니다.";
+      if(!elig.general.ok)return `일반공급 1순위 요건 미충족 — ${elig.general.reason}`;
+      return "자격은 충족하지만 최소 면적 조건에 맞는 일반공급 물량이 없습니다.";
+    };
     const picks=[
-      {person:"나",label:"특별공급",row:plans.a.special},
-      {person:"나",label:"일반공급",row:plans.a.general},
-      ...(plans.useB?[{person:"배우자",label:"특별공급",row:plans.b.special},{person:"배우자",label:"일반공급",row:plans.b.general}]:[])
-    ].filter(pick=>pick.row);
-    if(!picks.length){
+      {person:"나",label:"특별공급",row:plans.a.special,why:()=>whySpecial(eligA,plans.a.general)},
+      {person:"나",label:"일반공급",row:plans.a.general,why:()=>whyGeneral(eligA,plans.a.special)},
+      ...(plans.useB?[{person:"배우자",label:"특별공급",row:plans.b.special,why:()=>whySpecial(eligB,plans.b.general)},{person:"배우자",label:"일반공급",row:plans.b.general,why:()=>whyGeneral(eligB,plans.b.special)}]:[])
+    ];
+    if(!picks.some(pick=>pick.row)){
       $("quickResult").innerHTML=`<div class="quick-empty"><b>현재 입력으로 신청 가능한 유형이 없습니다.</b><br>통장 가입일(일반 1순위는 보통 24개월), 무주택 체크, 생년월일이 채워졌는지 확인해 주세요. 세부 요건(예치금·재당첨 제한 등)은 상세 모드의 '자격 체크' 표에서 확인할 수 있습니다.</div>`;
       return;
     }
@@ -1004,6 +1023,7 @@
     const planFor=size=>{if(!(size in planCache))planCache[size]=quickFundingCheck(size);return planCache[size]};
     const pickLines=picks.map((pick,index)=>{
       const row=pick.row;
+      if(!row)return `<div class="quick-pick quick-pick-empty"><div class="quick-pick-row"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>미추천</b></div><div class="quick-pick-main"><small class="qp-why">${esc(pick.why())}</small></div></div></div>`;
       const plan=planFor(row.size);
       let badge,detail="";
       if(!plan)badge=`<span class="fund-badge warn">자금 미확인</span>`;
