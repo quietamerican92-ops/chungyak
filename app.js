@@ -902,8 +902,11 @@
     renderQuickNoticeSummary();
     setupMoneyInputs($("quick"));
   }
+  let lastChipNoticeId=null;
   function updateNoticeChip(){
     if($("currentNoticeChip"))$("currentNoticeChip").textContent="📌 "+(notice.projectName||"공고를 선택하세요")+(notice.remainder?" · 무순위":"");
+    if(lastChipNoticeId!==null&&lastChipNoticeId!==notice.id)marketNoticeReset();
+    lastChipNoticeId=notice.id;
   }
   function noticePblancUrl(){
     if(notice.pblancUrl)return notice.pblancUrl;
@@ -1726,7 +1729,22 @@
   });
   $("runCompare").addEventListener("click",runCompare);
   $("modelFill").addEventListener("click",()=>applyModelPrediction(false));
-  $("loadMarket").addEventListener("click",()=>{$("marketResult").dataset.forceScope="";loadMarket()});
+  function setMarketButton(){
+    const result=$("marketResult"),button=$("loadMarket");
+    const loaded=result.dataset.loaded==="1";
+    const collapsed=result.classList.contains("is-hidden");
+    button.textContent=!loaded?"최근 6개월 시세 조회":collapsed?"시세 펼치기 ▾":"시세 접기 ▴";
+  }
+  $("loadMarket").addEventListener("click",async()=>{
+    const result=$("marketResult");
+    if(result.dataset.loaded==="1"){result.classList.toggle("is-hidden");setMarketButton();return}
+    result.dataset.forceScope="";
+    result.classList.remove("is-hidden");
+    await loadMarket();
+    if(result.querySelector(".mk-complexes,.mk-table"))result.dataset.loaded="1";
+    setMarketButton();
+  });
+  function marketNoticeReset(){const result=$("marketResult");if(!result)return;result.dataset.loaded="";result.classList.remove("is-hidden");result.innerHTML="";$("marketAreaLabel").textContent="";setMarketButton()}
   $("marketResult").addEventListener("click",event=>{
     const button=event.target.closest("[data-scope]");
     if(!button)return;
