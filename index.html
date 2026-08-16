@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-16">
+  <link rel="stylesheet" href="./styles.css?v=20260810-17">
 </head>
 <body>
   <header class="hero">
@@ -62,13 +62,7 @@
           <button id="loadMarket" class="ghost file-button-sm" type="button">최근 6개월 시세 조회</button>
         </div>
         <div id="marketResult" class="market-result"></div>
-        <details class="fold market-key-fold">
-          <summary>실거래가 API 키 (선택)</summary>
-          <div class="fold-body">
-            <p class="hint">공공데이터포털은 계정당 인증키가 하나라, 같은 계정에서 「국토교통부 아파트 매매 실거래가 자료」를 활용신청했다면 <b>청약홈 키가 그대로 쓰입니다</b>(이 칸은 비워두세요). 다른 계정의 키를 쓸 때만 여기에 입력하세요.</p>
-            <label>실거래 API 키 (다른 계정용)<input id="tradeApiKey" type="password" autocomplete="off" placeholder="비워두면 청약홈 키 사용"></label>
-          </div>
-        </details>
+        <input id="tradeApiKey" type="hidden" value="">
       </article>
 
       <article class="card quick-card">
@@ -555,9 +549,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-16"></script>
-  <script src="./model-data.js?v=20260810-16"></script>
-  <script src="./lawd-map.js?v=20260810-16"></script>
-  <script src="./app.js?v=20260810-16"></script>
+  <script src="./rules.js?v=20260810-17"></script>
+  <script src="./model-data.js?v=20260810-17"></script>
+  <script src="./lawd-map.js?v=20260810-17"></script>
+  <script src="./app.js?v=20260810-17"></script>
 </body>
 </html>

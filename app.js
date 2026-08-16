@@ -1120,7 +1120,7 @@
     const target=$("marketResult");
     const key=tradeKey();
     const lawd=noticeLawd();
-    if(!key){target.innerHTML="<p class='muted'>실거래 API 키를 아래에 먼저 입력해 주세요.</p>";document.querySelector(".market-key-fold").open=true;return}
+    if(!key){target.innerHTML="<p class='muted'>공공데이터포털 인증키가 없습니다. 상단 배너를 탭해 청약홈 키를 등록하면 실거래 시세도 같은 키로 조회됩니다(같은 계정에서 「아파트 매매 실거래가 자료」 활용신청 필요).</p>";return}
     if(!lawd){target.innerHTML=`<p class='muted'>공고 주소(${esc(notice.location||"없음")})에서 시군구를 찾지 못했습니다. 서울·경기·인천 공고만 지원합니다.</p>`;return}
     localStorage.setItem(TRADE_KEY_STORE,$("tradeApiKey").value.trim());
     target.innerHTML="<p class='muted'>최근 6개월 실거래를 불러오는 중…</p>";
@@ -1189,7 +1189,7 @@
       const scopeToggle=dongHint&&local.length>0&&!useLocal?`<button type="button" class="mk-scope-btn" data-scope="dong">${esc(dongHint)}만 보기 (${local.length}건)</button>`:useLocal?`<button type="button" class="mk-scope-btn" data-scope="gu">${esc(lawd.label)} 전체 보기 (${trades.length}건)</button>`:"";
       target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외 ${scopeToggle}</p>${noticePerPy?`<p class="mk-notice-py">이 공고 분양가 평당 <b>${formatWonShort(noticePerPy)}</b> (주택형 중앙값)</p>`:""}<div class="mk-complexes">${complexHtml||"<p class='muted'>단지별로 묶을 거래가 부족합니다.</p>"}</div><details class="fold mk-band-fold"><summary>전용면적대별 평균 (참고)</summary><div class="fold-body"><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div></div></details><p class="hint">대장 = 평당가 상위, 신축 = ${nowYear-11}년 이후 준공, 거래활발 = 거래 건수 상위. 평형은 이 공고 주택형 기준 ±5㎡로 묶었습니다(예: 59㎡급 = 구축 54~64㎡ 거래). 큰 "분양가 ±%"는 평당가 기준, 평형 옆 작은 %는 같은 평형 실거래 중앙값 대비 이 공고 최고가입니다.</p>`;
       target.dataset.dong=dongHint;
-    }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)} — 키가 「아파트 매매 실거래가 자료」 서비스에 활용신청되어 있는지 확인하세요.</p>`}
+    }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)} — 공공데이터포털에서 같은 계정으로 「국토교통부 아파트 매매 실거래가 자료」를 활용신청했는지 확인하세요.</p>`}
   }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
   const APPLYHOME_BASE="https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1";
