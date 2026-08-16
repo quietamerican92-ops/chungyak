@@ -1044,6 +1044,7 @@
   }
   function quickAfterPlan(plan){
     const shortage=Math.max(0,plan.loanShortage||0);
+    const timing=plan.firstShortage&&!shortage?Math.max(0,plan.firstShortage.shortage||0):0; // 총액은 되는데 시점 부족
     const credits=loadCredits();
     const credit=credits.reduce((sum,c)=>sum+num(c.amount),0),asset=num($("quickAsset").value);
     const mRate=num($("quickMortgageRate").value)||plan.loanCapacity.mortgageInterestRate;
@@ -1051,14 +1052,16 @@
     const mode=$("quickRepayMode").value;
     const cap=plan.loanCapacity;
     const baseMortgage=Math.min(plan.mortgageRequired,cap.estimatedLimit);
+    // 최종 부족: 자산 → 추가대출 순. 시점 부족(계약금·중도금): 자산은 잔금 때 파는 것이라 못 쓰고 즉시 대출만 유효
     const assetToGap=Math.min(asset,shortage),creditToGap=Math.min(credit,shortage-assetToGap),stillShort=shortage-assetToGap-creditToGap;
+    const creditToTiming=Math.min(credit-creditToGap,timing),stillTiming=timing-creditToTiming;
     const assetLeft=Math.max(0,asset-assetToGap),mortgage=Math.max(0,baseMortgage-assetLeft);
     // 주담대 첫 달 상환액 (방식별)
     const r=mRate/1200,n=mYears*12;
     const mortgagePmt=mortgage<=0?0:mode==="annuity"?Math.round(monthlyLoanPayment(mortgage,mRate,mYears)):mode==="equal"?Math.round(mortgage/n+mortgage*r):Math.round(mortgage*r);
     const modeLabel=mode==="annuity"?"원리금균등":mode==="equal"?"원금균등 · 첫 달 기준":"거치 · 이자만";
     // 추가대출: 목록 순서대로 필요한 만큼만 사용, 각 건 조건대로 월 부담
-    let remain=creditToGap;const used=[];
+    let remain=creditToGap+creditToTiming;const used=[];
     credits.forEach(c=>{if(remain<=0)return;const take=Math.min(num(c.amount),remain);if(take>0){used.push({...c,amount:take});remain-=take}});
     const creditPmt=used.reduce((sum,c)=>sum+creditPayment(c),0);
     const total=mortgagePmt+creditPmt;
@@ -1067,7 +1070,12 @@
     const ratio=netIncome?total/netIncome*100:0;
     const fill=[];
     if(shortage>0){if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`)}
-    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ ${creditNote}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
+    let fillText;
+    if(shortage>0)fillText=(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결");
+    else if(timing>0)fillText=`${esc(plan.firstShortage.label)} 때 ${formatWonShort(timing)}: `+(creditToTiming?`추가대출 ${formatWonShort(creditToTiming)}`:"즉시 쓸 대출 없음")+(stillTiming>0?` → 그래도 ${formatWonShort(stillTiming)} 부족 (주식·저축은 그 시점엔 못 씀)`:" → 해결");
+    else fillText="부족 없음";
+    const fillCls=shortage?(stillShort>0?"bad":"ok"):timing?(stillTiming>0?"bad":"ok"):"";
+    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${fillCls}">${fillText}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ ${creditNote}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
   function renderQuickResult(){
     const profile=profileData();
@@ -1110,11 +1118,11 @@
       let badge,detail="";
       if(!plan)badge=`<span class="fund-badge warn">자금 미확인</span>`;
       else if(plan.loanShortage>0)badge=`<span class="fund-badge bad">▲ 부족 ${formatWonShort(plan.loanShortage)}</span>`;
-      else if(plan.firstShortage)badge=`<span class="fund-badge warn">△ 중간공백 ${formatWonShort(plan.firstShortage.shortage)}</span>`;
+      else if(plan.firstShortage)badge=`<span class="fund-badge warn">△ ${esc(plan.firstShortage.label)} 때 ${formatWonShort(plan.firstShortage.shortage)} 부족</span>`;
       else badge=`<span class="fund-badge ok">✓ 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
       if(plan){
         const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
-        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ ${esc(plan.firstShortage.label)} ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>${quickAfterPlan(plan)}</div>`;
+        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ 총액은 되지만 ${esc(plan.firstShortage.label)}(${esc(plan.firstShortage.dueText)}) 때 현금 ${formatWonShort(plan.firstShortage.shortage)} 부족`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>${quickAfterPlan(plan)}</div>`;
       }
       return `<div class="quick-pick" data-pick="${index}">${badge}<div class="quick-pick-row"><div class="quick-pick-type ${pick.person==="배우자"?"pB":"pA"}"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div></div><small class="tap-hint">자금 상세 ▸</small>${detail}</div>`;
     }).join("");
@@ -1559,7 +1567,7 @@
     const married=R.hasSecondApplicant(profileData())&&$("bothApply").checked;
     const rowsHtml=results.map((row,index)=>{
       const pickText=row.best?`${R.TYPE_LABELS[row.best.type]} · ${row.best.size} (${chanceLabel(row.best)})`:"신청 가능 유형 없음";
-      const fundText=!row.funding?"분양가·일정 미확인":row.funding.loanShortage>0?`부족 ${formatWonShort(row.funding.loanShortage)}`:row.funding.firstShortage?`중간 공백 ${formatWonShort(row.funding.firstShortage.shortage)}`:`가능 · 여유 ${formatWonShort(row.funding.finalSurplus)}`;
+      const fundText=!row.funding?"분양가·일정 미확인":row.funding.loanShortage>0?`부족 ${formatWonShort(row.funding.loanShortage)}`:row.funding.firstShortage?`${row.funding.firstShortage.label} 때 ${formatWonShort(row.funding.firstShortage.shortage)} 부족`:`가능 · 여유 ${formatWonShort(row.funding.finalSurplus)}`;
       const fundCls=!row.funding?"warn":row.funding.loanShortage>0?"bad":row.funding.firstShortage?"warn":"ok";
       return `<tr class="${index===0?"compare-winner":""}"><td>${index===0?"🏆 ":""}<b>${esc(row.name)}</b>${row.verified?"":"<br><small class='muted'>미검수</small>"}</td><td>${esc(row.announce||"미확인")}</td><td>${esc(pickText)}</td><td><span class="compare-fund ${fundCls}">${esc(fundText)}</span></td></tr>`;
     }).join("");

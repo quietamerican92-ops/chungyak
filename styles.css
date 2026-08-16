@@ -666,3 +666,10 @@ label:has(.suffix) input{padding-right:42px}
 .credit-add{margin-top:9px;width:100%}
 .credit-empty{margin:0 0 4px}
 @media(max-width:760px){.credit-grid{grid-template-columns:1fr 1fr}}
+
+/* 간편 카드 상세: 필요/투입 세로 스택 (좁은 카드에서 잘림 방지) */
+.quick-pick-detail .fund-cols{grid-template-columns:1fr;gap:8px}
+.quick-pick-detail .fund-col h5{white-space:normal}
+.quick-pick-detail .fund-col li{white-space:normal}
+.quick-pick-detail .fund-col li b{white-space:nowrap}
+.qp-after-row b{white-space:normal;line-height:1.45}
