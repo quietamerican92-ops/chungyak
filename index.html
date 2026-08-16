@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-20">
+  <link rel="stylesheet" href="./styles.css?v=20260810-21">
 </head>
 <body>
   <header class="hero">
@@ -101,8 +101,17 @@
           <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>부족하면 쓸 수 있는 추가 대출<input id="quickCredit" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">마이너스통장·직장대출 한도 (선택)</small></label>
+          <label>추가 대출 이자율<input id="quickCreditRate" type="number" min="0" max="30" step="0.1" value="6.5"><span class="suffix">%</span><small class="field-help">월 부담은 이자만 반영</small></label>
           <label>잔금 때 팔 수 있는 주식·자산<input id="quickAsset" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">현재 평가액 (선택)</small></label>
         </div>
+        <details class="fold quick-loan-fold">
+          <summary>잔금(주택담보)대출 조건 <span class="fold-info" id="quickLoanFoldInfo"></span></summary>
+          <div class="form-grid quick-grid fold-body">
+            <label>주담대 금리<input id="quickMortgageRate" type="number" min="0" max="30" step="0.1" value="4.5"><span class="suffix">%</span></label>
+            <label>대출 기간<input id="quickMortgageYears" type="number" min="1" max="50" value="30"><span class="suffix">년</span></label>
+            <label>상환 방식<select id="quickRepayMode"><option value="annuity">원리금균등 (매월 동일)</option><option value="equal">원금균등 (초기 많고 점차 감소)</option><option value="interest">거치·이자만 (원금 나중)</option></select></label>
+          </div>
+        </details>
         <p class="hint">소득은 특공 소득단계와 DSR 대출한도 계산에, 현금·저축은 계약금·중도금 납부 가능성 판정에 쓰입니다.</p>
       </article>
 
@@ -515,7 +524,8 @@
         <div class="card-head"><div><h3>입주 후 월 상환액</h3><p>잔금대출 원리금에 부족액 재원으로 쓴 대출(마이너스통장·직장대출)의 상환까지 합산합니다. 보유 자산의 평가차익을 잔금 때 팔아 넣으면 상환 부담이 얼마나 줄어드는지도 봅니다.</p></div></div>
         <div class="gap-grid">
           <label>마이너스통장·직장대출 금리<input id="repayCreditRate" type="number" min="0" max="30" step="0.1" value="6.5"><span class="suffix">%</span></label>
-          <label>마이너스통장·직장대출 상환기간<input id="repayCreditYears" type="number" min="1" max="30" value="5"><span class="suffix">년</span></label>
+          <input id="repayCreditYears" type="hidden" value="5">
+          <label>주담대 상환 방식<select id="quickRepayModeMirror" disabled><option>간편 진단의 잔금대출 조건과 동일</option></select><small class="field-help">간편 진단 → 잔금대출 조건에서 변경</small></label>
           <label>보유 주식·자산 현재 평가액<input id="repayAssetValue" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
           <label>입주 시점까지 기대 수익률<input id="repayAssetReturn" type="number" min="-100" max="300" step="1" value="0"><span class="suffix">%</span><small class="field-help">예: 잔금까지 3년 · 연 7% 복리면 약 22%</small></label>
           <label>잔금에 투입할 비율<input id="repayAssetUse" type="number" min="0" max="100" step="5" value="100"><span class="suffix">%</span></label>
@@ -552,9 +562,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-20"></script>
-  <script src="./model-data.js?v=20260810-20"></script>
-  <script src="./lawd-map.js?v=20260810-20"></script>
-  <script src="./app.js?v=20260810-20"></script>
+  <script src="./rules.js?v=20260810-21"></script>
+  <script src="./model-data.js?v=20260810-21"></script>
+  <script src="./lawd-map.js?v=20260810-21"></script>
+  <script src="./app.js?v=20260810-21"></script>
 </body>
 </html>

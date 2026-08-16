@@ -867,15 +867,18 @@
       const baseMortgage=Math.min(plan.mortgageRequired,cap.estimatedLimit)+Math.min(num($("gapLoanExtra").value),Math.max(0,plan.loanShortage));
       const mortgageAfterAsset=Math.max(0,baseMortgage-assetInject);
       const creditAfterAsset=Math.max(0,creditPrincipal-Math.max(0,assetInject-baseMortgage));
-      const pmt=(principal,rate,years)=>principal>0?Math.round(monthlyLoanPayment(principal,rate,years)):0;
+      const mode=($("quickRepayMode")?.value)||"annuity";
+      const mPmt=(principal)=>{if(principal<=0)return 0;const r=rateM/1200,n=yearsM*12;return mode==="annuity"?Math.round(monthlyLoanPayment(principal,rateM,yearsM)):mode==="equal"?Math.round(principal/n+principal*r):Math.round(principal*r)};
+      const modeLabel=mode==="annuity"?"원리금균등":mode==="equal"?"원금균등(첫 달)":"거치·이자만";
+      const cPmt=(principal)=>principal>0?Math.round(principal*creditRate/1200):0;
       const rows=[
-        {label:"잔금대출 원리금",before:pmt(baseMortgage,rateM,yearsM),after:pmt(mortgageAfterAsset,rateM,yearsM),note:`${yearsM}년 · ${rateM.toFixed(1)}%`,p0:baseMortgage,p1:mortgageAfterAsset},
-        ...(creditPrincipal>0?[{label:"마이너스통장·직장대출 상환",before:pmt(creditPrincipal,creditRate,creditYears),after:pmt(creditAfterAsset,creditRate,creditYears),note:`${creditYears}년 · ${creditRate.toFixed(1)}%`,p0:creditPrincipal,p1:creditAfterAsset}]:[])
+        {label:"잔금대출",before:mPmt(baseMortgage),after:mPmt(mortgageAfterAsset),note:`${yearsM}년 · ${rateM.toFixed(1)}% · ${modeLabel}`,p0:baseMortgage,p1:mortgageAfterAsset},
+        ...(creditPrincipal>0?[{label:"마이너스통장·직장대출 이자",before:cPmt(creditPrincipal),after:cPmt(creditAfterAsset),note:`${creditRate.toFixed(1)}% · 이자만 반영`,p0:creditPrincipal,p1:creditAfterAsset}]:[])
       ];
       const totalBefore=rows.reduce((s,r)=>s+r.before,0),totalAfter=rows.reduce((s,r)=>s+r.after,0);
       const dtiBefore=netIncome?totalBefore/netIncome*100:0,dtiAfter=netIncome?totalAfter/netIncome*100:0;
       const hasAsset=assetInject>0;
-      $("repayResult").innerHTML=`<div class="table-wrap"><table class="repay-table"><thead><tr><th>항목</th><th>대출 원금</th><th>월 상환액</th>${hasAsset?`<th>자산 투입 후 원금</th><th>자산 투입 후 월 상환</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.label)}</b><small>${esc(r.note)}</small></td><td>${formatWonShort(r.p0)}</td><td><b>${formatWon(r.before)}</b></td>${hasAsset?`<td>${formatWonShort(r.p1)}</td><td><b class="${r.after<r.before?"ok":""}">${formatWon(r.after)}</b></td>`:""}</tr>`).join("")}</tbody><tfoot><tr><td>합계 (월)</td><td></td><td><b>${formatWon(totalBefore)}</b>${netIncome?`<small>세후소득의 ${dtiBefore.toFixed(0)}%</small>`:""}</td>${hasAsset?`<td></td><td><b class="ok">${formatWon(totalAfter)}</b>${netIncome?`<small>세후소득의 ${dtiAfter.toFixed(0)}%</small>`:""}</td>`:""}</tr></tfoot></table></div>${hasAsset?`<div class="fund-net ok">자산 ${formatWonShort(assetValue)} → 입주 시 ${formatWonShort(assetAtMoveIn)}(차익 ${assetGain>=0?"+":""}${formatWonShort(assetGain)}) 중 ${(assetUse*100).toFixed(0)}% 투입 → <b>월 상환 ${formatWon(totalBefore-totalAfter)} 감소</b> · 총이자 절감 약 ${formatWonShort(Math.max(0,(totalBefore-totalAfter)*yearsM*12-(baseMortgage-mortgageAfterAsset)))}</div>`:""}${netIncome&&dtiBefore>40?`<p class="hint">월 상환액이 세후소득의 40%를 넘습니다. 일반적으로 30~35% 이내가 안전권으로 봅니다.</p>`:""}<p class="hint">주식·펀드 차익은 매도 시 양도세·수수료가 있을 수 있고 가격 변동 위험이 있으니 보수적으로 잡으세요. 자산은 잔금대출을 먼저 줄이고, 남으면 고금리 대출(마이너스통장) 순으로 상환하는 것으로 계산했습니다.</p>`;
+      $("repayResult").innerHTML=`<div class="table-wrap"><table class="repay-table"><thead><tr><th>항목</th><th>대출 원금</th><th>월 상환액</th>${hasAsset?`<th>자산 투입 후 원금</th><th>자산 투입 후 월 상환</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.label)}</b><small>${esc(r.note)}</small></td><td>${formatWonShort(r.p0)}</td><td><b>${formatWon(r.before)}</b></td>${hasAsset?`<td>${formatWonShort(r.p1)}</td><td><b class="${r.after<r.before?"ok":""}">${formatWon(r.after)}</b></td>`:""}</tr>`).join("")}</tbody><tfoot><tr><td>합계 (월)</td><td></td><td><b>${formatWon(totalBefore)}</b>${netIncome?`<small>세후소득의 ${dtiBefore.toFixed(0)}%</small>`:""}</td>${hasAsset?`<td></td><td><b class="ok">${formatWon(totalAfter)}</b>${netIncome?`<small>세후소득의 ${dtiAfter.toFixed(0)}%</small>`:""}</td>`:""}</tr></tfoot></table></div>${hasAsset?`<div class="fund-net ok">자산 ${formatWonShort(assetValue)} → 입주 시 ${formatWonShort(assetAtMoveIn)}(차익 ${assetGain>=0?"+":""}${formatWonShort(assetGain)}) 중 ${(assetUse*100).toFixed(0)}% 투입 → <b>월 부담 ${formatWon(totalBefore-totalAfter)} 감소</b></div>`:""}${netIncome&&dtiBefore>40?`<p class="hint">월 상환액이 세후소득의 40%를 넘습니다. 일반적으로 30~35% 이내가 안전권으로 봅니다.</p>`:""}<p class="hint">주식·펀드 차익은 매도 시 양도세·수수료가 있을 수 있고 가격 변동 위험이 있으니 보수적으로 잡으세요. 자산은 잔금대출을 먼저 줄이고, 남으면 고금리 대출(마이너스통장) 순으로 상환하는 것으로 계산했습니다.</p>`;
     })();
     $("scheduleFoldInfo").textContent=[input.contractDate,input.moveInDate].filter(Boolean).map(value=>value.slice(2).replaceAll("-",".")).join(" → ")||"날짜 미입력";
     $("interimFoldInfo").textContent=`${plan.interestByInstallment.length?`대출 ${plan.interestByInstallment.length}회`:"전액 자납"} · 연 ${input.interimInterestRate}%`;
@@ -885,7 +888,7 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"],["quickNetIncome","repayNetIncome"]];
+  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"],["quickNetIncome","repayNetIncome"],["quickCreditRate","repayCreditRate"],["quickMortgageRate","mortgageInterestRate"],["quickMortgageYears","mortgageYears"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
@@ -1032,23 +1035,26 @@
   function quickAfterPlan(plan){
     const shortage=Math.max(0,plan.loanShortage||0);
     const credit=num($("quickCredit").value),asset=num($("quickAsset").value);
+    const creditRate=num($("quickCreditRate").value);
+    const mRate=num($("quickMortgageRate").value)||plan.loanCapacity.mortgageInterestRate;
+    const mYears=Math.max(1,num($("quickMortgageYears").value)||plan.loanCapacity.mortgageYears);
+    const mode=$("quickRepayMode").value;
     const cap=plan.loanCapacity;
     const baseMortgage=Math.min(plan.mortgageRequired,cap.estimatedLimit);
-    // 부족분 메우기: 자산 → 추가대출 순
     const assetToGap=Math.min(asset,shortage),creditToGap=Math.min(credit,shortage-assetToGap),stillShort=shortage-assetToGap-creditToGap;
-    // 남은 자산은 잔금대출 축소에 투입
     const assetLeft=Math.max(0,asset-assetToGap),mortgage=Math.max(0,baseMortgage-assetLeft);
-    const pmt=(p,r,y)=>p>0?Math.round(monthlyLoanPayment(p,r,y)):0;
-    const mortgagePmt=pmt(mortgage,cap.mortgageInterestRate,cap.mortgageYears),creditPmt=pmt(creditToGap,6.5,5);
+    // 주담대 첫 달 상환액 (방식별)
+    const r=mRate/1200,n=mYears*12;
+    const mortgagePmt=mortgage<=0?0:mode==="annuity"?Math.round(monthlyLoanPayment(mortgage,mRate,mYears)):mode==="equal"?Math.round(mortgage/n+mortgage*r):Math.round(mortgage*r);
+    const modeLabel=mode==="annuity"?"원리금균등":mode==="equal"?"원금균등 · 첫 달 기준":"거치 · 이자만";
+    // 추가대출: 이자만
+    const creditPmt=Math.round(creditToGap*creditRate/1200);
     const total=mortgagePmt+creditPmt;
     const netIncome=num($("quickNetIncome").value);
     const ratio=netIncome?total/netIncome*100:0;
     const fill=[];
-    if(shortage>0){
-      if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);
-      if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`);
-    }
-    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">잔금대출 ${formatWonShort(mortgage)} (${cap.mortgageYears}년·${cap.mortgageInterestRate.toFixed(1)}%)${creditToGap?` + 추가대출 ${formatWonShort(creditToGap)} (5년·6.5%)`:""}${assetLeft?` · 남은 자산 ${formatWonShort(assetLeft)}은 잔금대출 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
+    if(shortage>0){if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`)}
+    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ 추가대출 ${formatWonShort(creditToGap)} · ${creditRate.toFixed(1)}% 이자만 = ${formatWon(creditPmt)}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
   function renderQuickResult(){
     const profile=profileData();
@@ -1736,6 +1742,10 @@
   let quickSyncTimer;
   const quickLiveSync=()=>{clearTimeout(quickSyncTimer);quickSyncTimer=setTimeout(()=>{syncQuickToDetail();if($("quickResult").innerHTML){calculate();renderQuickResult()}},500)};
   QUICK_FIELD_MAP.forEach(([from])=>$(from)?.addEventListener("input",quickLiveSync));
+  $("quickRepayMode")?.addEventListener("change",()=>{quickLiveSync();updateQuickLoanFoldInfo()});
+  ["quickMortgageRate","quickMortgageYears"].forEach(id=>$(id)?.addEventListener("input",updateQuickLoanFoldInfo));
+  function updateQuickLoanFoldInfo(){const el=$("quickLoanFoldInfo");if(!el)return;const mode=$("quickRepayMode").value;el.textContent=`${num($("quickMortgageRate").value).toFixed(1)}% · ${num($("quickMortgageYears").value)}년 · ${mode==="annuity"?"원리금균등":mode==="equal"?"원금균등":"거치·이자만"}`}
+  updateQuickLoanFoldInfo();
   ["quickNoHome","quickNeverHome","quickHead"].forEach(id=>$(id)?.addEventListener("change",quickLiveSync));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",quickLiveSync));
   $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickResult()});
