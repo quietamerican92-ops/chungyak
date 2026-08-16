@@ -657,3 +657,12 @@ label:has(.suffix) input{padding-right:42px}
 .qp-after-row b.ok{color:#8fe3b3}.qp-after-row b.bad{color:#f2a0a0}
 .qp-after-row b small{font-size:9px;color:#b9c8be;font-weight:700}
 .qp-after-note{font-size:9px;color:#9fb3a6;line-height:1.5}
+
+.credit-list{display:flex;flex-direction:column;gap:9px}
+.credit-item{border:1px solid var(--line);border-radius:12px;background:#fff;padding:11px 12px}
+.credit-item-head{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.credit-name{flex:1;margin:0!important;font-weight:900}
+.credit-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.credit-add{margin-top:9px;width:100%}
+.credit-empty{margin:0 0 4px}
+@media(max-width:760px){.credit-grid{grid-template-columns:1fr 1fr}}

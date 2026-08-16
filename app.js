@@ -1032,10 +1032,20 @@
       payments
     });
   }
+  const CREDIT_KEY="subscription_quick_credits_v3";
+  function loadCredits(){const list=readStorage(CREDIT_KEY,[]);return Array.isArray(list)?list:[]}
+  function saveCredits(list){localStorage.setItem(CREDIT_KEY,JSON.stringify(list));const total=list.reduce((sum,c)=>sum+num(c.amount),0);$("quickCredit").value=String(total);if($("gapCredit"))$("gapCredit").value=formatNumberInput(total);$("quickCreditFoldInfo").textContent=list.length?`${list.length}건 · ${formatWonShort(total)}`:"없음"}
+  function creditModeLabel(mode){return mode==="annuity"?"원리금균등":mode==="equal"?"원금균등":"이자만"}
+  function creditPayment(c){const p=num(c.amount),rate=num(c.rate),r=rate/1200,years=Math.max(1,num(c.years)||5),n=years*12,mode=c.mode||"interest";if(p<=0)return 0;return mode==="interest"?Math.round(p*r):mode==="annuity"?Math.round(monthlyLoanPayment(p,rate,years)):Math.round(p/n+p*r)}
+  function renderCredits(){
+    const list=loadCredits();
+    $("quickCreditList").innerHTML=list.length?list.map((c,i)=>`<div class="credit-item" data-ci="${i}"><div class="credit-item-head"><input class="credit-name" data-cf="name" value="${esc(c.name||"")}" placeholder="예: 마이너스통장 · 사내대출"><button type="button" class="icon-delete" data-cdel="${i}" aria-label="삭제">×</button></div><div class="form-grid quick-grid credit-grid"><label>한도·금액<input class="money-input" data-cf="amount" type="text" inputmode="numeric" value="${formatNumberInput(c.amount)}"><span class="suffix">원</span></label><label>금리<input data-cf="rate" type="number" min="0" max="30" step="0.1" value="${num(c.rate)||6.5}"><span class="suffix">%</span></label><label>상환 방식<select data-cf="mode"><option value="interest"${(c.mode||"interest")==="interest"?" selected":""}>이자만 (마이너스통장)</option><option value="annuity"${c.mode==="annuity"?" selected":""}>원리금균등</option><option value="equal"${c.mode==="equal"?" selected":""}>원금균등</option></select></label><label>기간<input data-cf="years" type="number" min="1" max="30" value="${num(c.years)||5}"><span class="suffix">년</span><small class="field-help">이자만 방식은 무시</small></label></div></div>`).join(""):`<p class="muted credit-empty">추가 대출이 없습니다. 아래 버튼으로 항목을 추가하세요.</p>`;
+    wrapSuffixInputs();setupMoneyInputs($("quickCreditList"));saveCredits(list);
+  }
   function quickAfterPlan(plan){
     const shortage=Math.max(0,plan.loanShortage||0);
-    const credit=num($("quickCredit").value),asset=num($("quickAsset").value);
-    const creditRate=num($("quickCreditRate").value);
+    const credits=loadCredits();
+    const credit=credits.reduce((sum,c)=>sum+num(c.amount),0),asset=num($("quickAsset").value);
     const mRate=num($("quickMortgageRate").value)||plan.loanCapacity.mortgageInterestRate;
     const mYears=Math.max(1,num($("quickMortgageYears").value)||plan.loanCapacity.mortgageYears);
     const mode=$("quickRepayMode").value;
@@ -1047,14 +1057,17 @@
     const r=mRate/1200,n=mYears*12;
     const mortgagePmt=mortgage<=0?0:mode==="annuity"?Math.round(monthlyLoanPayment(mortgage,mRate,mYears)):mode==="equal"?Math.round(mortgage/n+mortgage*r):Math.round(mortgage*r);
     const modeLabel=mode==="annuity"?"원리금균등":mode==="equal"?"원금균등 · 첫 달 기준":"거치 · 이자만";
-    // 추가대출: 이자만
-    const creditPmt=Math.round(creditToGap*creditRate/1200);
+    // 추가대출: 목록 순서대로 필요한 만큼만 사용, 각 건 조건대로 월 부담
+    let remain=creditToGap;const used=[];
+    credits.forEach(c=>{if(remain<=0)return;const take=Math.min(num(c.amount),remain);if(take>0){used.push({...c,amount:take});remain-=take}});
+    const creditPmt=used.reduce((sum,c)=>sum+creditPayment(c),0);
     const total=mortgagePmt+creditPmt;
+    const creditNote=used.map(c=>`${esc(c.name||"추가대출")} ${formatWonShort(c.amount)} · ${num(c.rate).toFixed(1)}% · ${creditModeLabel(c.mode||"interest")} = ${formatWon(creditPayment(c))}`).join(" ｜ ");
     const netIncome=num($("quickNetIncome").value);
     const ratio=netIncome?total/netIncome*100:0;
     const fill=[];
     if(shortage>0){if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`)}
-    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ 추가대출 ${formatWonShort(creditToGap)} · ${creditRate.toFixed(1)}% 이자만 = ${formatWon(creditPmt)}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
+    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ ${creditNote}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
   function renderQuickResult(){
     const profile=profileData();
@@ -1743,6 +1756,11 @@
   const quickLiveSync=()=>{clearTimeout(quickSyncTimer);quickSyncTimer=setTimeout(()=>{syncQuickToDetail();if($("quickResult").innerHTML){calculate();renderQuickResult()}},500)};
   QUICK_FIELD_MAP.forEach(([from])=>$(from)?.addEventListener("input",quickLiveSync));
   $("quickRepayMode")?.addEventListener("change",()=>{quickLiveSync();updateQuickLoanFoldInfo()});
+  $("quickCreditAdd").addEventListener("click",()=>{const list=loadCredits();list.push({name:"",amount:0,rate:6.5,mode:"interest",years:5});saveCredits(list);renderCredits();$("quickCreditList").querySelector(".credit-item:last-child .credit-name")?.focus()});
+  $("quickCreditList").addEventListener("click",event=>{const del=event.target.closest("[data-cdel]");if(!del)return;const list=loadCredits();list.splice(num(del.dataset.cdel),1);saveCredits(list);renderCredits();quickLiveSync()});
+  $("quickCreditList").addEventListener("input",event=>{const field=event.target.closest("[data-cf]");if(!field)return;const item=field.closest(".credit-item");const list=loadCredits();const c=list[num(item.dataset.ci)];if(!c)return;const key=field.dataset.cf;c[key]=(key==="name"||key==="mode")?field.value:num(field.value);saveCredits(list);quickLiveSync()});
+  $("quickCreditList").addEventListener("change",event=>{if(!event.target.matches("select[data-cf]"))return;const item=event.target.closest(".credit-item");const list=loadCredits();const c=list[num(item.dataset.ci)];if(c){c.mode=event.target.value;saveCredits(list);quickLiveSync()}});
+  renderCredits();
   ["quickMortgageRate","quickMortgageYears"].forEach(id=>$(id)?.addEventListener("input",updateQuickLoanFoldInfo));
   function updateQuickLoanFoldInfo(){const el=$("quickLoanFoldInfo");if(!el)return;const mode=$("quickRepayMode").value;el.textContent=`${num($("quickMortgageRate").value).toFixed(1)}% · ${num($("quickMortgageYears").value)}년 · ${mode==="annuity"?"원리금균등":mode==="equal"?"원금균등":"거치·이자만"}`}
   updateQuickLoanFoldInfo();

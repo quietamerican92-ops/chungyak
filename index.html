@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-21">
+  <link rel="stylesheet" href="./styles.css?v=20260810-22">
 </head>
 <body>
   <header class="hero">
@@ -100,10 +100,17 @@
           <label>가구 월 세후소득(실수령)<input id="quickNetIncome" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">부부 합산 · 입주 후 상환부담률 계산용</small></label>
           <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
-          <label>부족하면 쓸 수 있는 추가 대출<input id="quickCredit" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">마이너스통장·직장대출 한도 (선택)</small></label>
-          <label>추가 대출 이자율<input id="quickCreditRate" type="number" min="0" max="30" step="0.1" value="6.5"><span class="suffix">%</span><small class="field-help">월 부담은 이자만 반영</small></label>
           <label>잔금 때 팔 수 있는 주식·자산<input id="quickAsset" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">현재 평가액 (선택)</small></label>
         </div>
+        <input id="quickCredit" type="hidden" value="0"><input id="quickCreditRate" type="hidden" value="6.5">
+        <details class="fold quick-loan-fold" open>
+          <summary>부족하면 쓸 추가 대출 <span class="fold-info" id="quickCreditFoldInfo">없음</span></summary>
+          <div class="fold-body">
+            <div id="quickCreditList" class="credit-list"></div>
+            <button type="button" id="quickCreditAdd" class="ghost credit-add">＋ 추가 대출 항목</button>
+            <p class="hint">마이너스통장·직장(교직원)대출·신용대출 등을 각각 넣으세요. 부족분은 자산 → 추가대출(위에서부터) 순으로 메우고, 남는 한도는 쓰지 않은 것으로 봅니다.</p>
+          </div>
+        </details>
         <details class="fold quick-loan-fold">
           <summary>잔금(주택담보)대출 조건 <span class="fold-info" id="quickLoanFoldInfo"></span></summary>
           <div class="form-grid quick-grid fold-body">
@@ -562,9 +569,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-21"></script>
-  <script src="./model-data.js?v=20260810-21"></script>
-  <script src="./lawd-map.js?v=20260810-21"></script>
-  <script src="./app.js?v=20260810-21"></script>
+  <script src="./rules.js?v=20260810-22"></script>
+  <script src="./model-data.js?v=20260810-22"></script>
+  <script src="./lawd-map.js?v=20260810-22"></script>
+  <script src="./app.js?v=20260810-22"></script>
 </body>
 </html>
