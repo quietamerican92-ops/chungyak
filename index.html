@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-19">
+  <link rel="stylesheet" href="./styles.css?v=20260810-20">
 </head>
 <body>
   <header class="hero">
@@ -95,8 +95,9 @@
       <article class="card quick-card">
         <h3><span class="quick-step">4</span> 소득과 자금</h3>
         <div class="form-grid quick-grid">
-          <label>내 월소득(세전)<input id="quickIncomeA" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>내 월소득(세전)<input id="quickIncomeA" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">특공 소득기준·DSR 계산용</small></label>
           <label id="quickIncomeBField" class="is-hidden">배우자 월소득(세전)<input id="quickIncomeB" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>가구 월 세후소득(실수령)<input id="quickNetIncome" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">부부 합산 · 입주 후 상환부담률 계산용</small></label>
           <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>부족하면 쓸 수 있는 추가 대출<input id="quickCredit" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">마이너스통장·직장대출 한도 (선택)</small></label>
@@ -551,9 +552,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-19"></script>
-  <script src="./model-data.js?v=20260810-19"></script>
-  <script src="./lawd-map.js?v=20260810-19"></script>
-  <script src="./app.js?v=20260810-19"></script>
+  <script src="./rules.js?v=20260810-20"></script>
+  <script src="./model-data.js?v=20260810-20"></script>
+  <script src="./lawd-map.js?v=20260810-20"></script>
+  <script src="./app.js?v=20260810-20"></script>
 </body>
 </html>

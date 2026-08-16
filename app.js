@@ -885,7 +885,7 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"]];
+  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"],["quickNetIncome","repayNetIncome"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
@@ -1041,14 +1041,14 @@
     const pmt=(p,r,y)=>p>0?Math.round(monthlyLoanPayment(p,r,y)):0;
     const mortgagePmt=pmt(mortgage,cap.mortgageInterestRate,cap.mortgageYears),creditPmt=pmt(creditToGap,6.5,5);
     const total=mortgagePmt+creditPmt;
-    const netIncome=(num($("quickIncomeA").value)+(quickFamily()==="married"?num($("quickIncomeB").value):0))*0.85;
+    const netIncome=num($("quickNetIncome").value);
     const ratio=netIncome?total/netIncome*100:0;
     const fill=[];
     if(shortage>0){
       if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);
       if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`);
     }
-    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득 추정의 ${ratio.toFixed(0)}%`:""}</small></b></div><small class="qp-after-note">잔금대출 ${formatWonShort(mortgage)} (${cap.mortgageYears}년·${cap.mortgageInterestRate.toFixed(1)}%)${creditToGap?` + 추가대출 ${formatWonShort(creditToGap)} (5년·6.5%)`:""}${assetLeft?` · 남은 자산 ${formatWonShort(assetLeft)}은 잔금대출 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
+    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">잔금대출 ${formatWonShort(mortgage)} (${cap.mortgageYears}년·${cap.mortgageInterestRate.toFixed(1)}%)${creditToGap?` + 추가대출 ${formatWonShort(creditToGap)} (5년·6.5%)`:""}${assetLeft?` · 남은 자산 ${formatWonShort(assetLeft)}은 잔금대출 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
   function renderQuickResult(){
     const profile=profileData();
