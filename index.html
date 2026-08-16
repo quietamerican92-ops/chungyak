@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-18">
+  <link rel="stylesheet" href="./styles.css?v=20260810-19">
 </head>
 <body>
   <header class="hero">
@@ -99,6 +99,8 @@
           <label id="quickIncomeBField" class="is-hidden">배우자 월소득(세전)<input id="quickIncomeB" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
+          <label>부족하면 쓸 수 있는 추가 대출<input id="quickCredit" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">마이너스통장·직장대출 한도 (선택)</small></label>
+          <label>잔금 때 팔 수 있는 주식·자산<input id="quickAsset" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">현재 평가액 (선택)</small></label>
         </div>
         <p class="hint">소득은 특공 소득단계와 DSR 대출한도 계산에, 현금·저축은 계약금·중도금 납부 가능성 판정에 쓰입니다.</p>
       </article>
@@ -549,9 +551,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-18"></script>
-  <script src="./model-data.js?v=20260810-18"></script>
-  <script src="./lawd-map.js?v=20260810-18"></script>
-  <script src="./app.js?v=20260810-18"></script>
+  <script src="./rules.js?v=20260810-19"></script>
+  <script src="./model-data.js?v=20260810-19"></script>
+  <script src="./lawd-map.js?v=20260810-19"></script>
+  <script src="./app.js?v=20260810-19"></script>
 </body>
 </html>

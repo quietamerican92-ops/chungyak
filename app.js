@@ -885,7 +885,7 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"]];
+  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
@@ -1029,6 +1029,27 @@
       payments
     });
   }
+  function quickAfterPlan(plan){
+    const shortage=Math.max(0,plan.loanShortage||0);
+    const credit=num($("quickCredit").value),asset=num($("quickAsset").value);
+    const cap=plan.loanCapacity;
+    const baseMortgage=Math.min(plan.mortgageRequired,cap.estimatedLimit);
+    // 부족분 메우기: 자산 → 추가대출 순
+    const assetToGap=Math.min(asset,shortage),creditToGap=Math.min(credit,shortage-assetToGap),stillShort=shortage-assetToGap-creditToGap;
+    // 남은 자산은 잔금대출 축소에 투입
+    const assetLeft=Math.max(0,asset-assetToGap),mortgage=Math.max(0,baseMortgage-assetLeft);
+    const pmt=(p,r,y)=>p>0?Math.round(monthlyLoanPayment(p,r,y)):0;
+    const mortgagePmt=pmt(mortgage,cap.mortgageInterestRate,cap.mortgageYears),creditPmt=pmt(creditToGap,6.5,5);
+    const total=mortgagePmt+creditPmt;
+    const netIncome=(num($("quickIncomeA").value)+(quickFamily()==="married"?num($("quickIncomeB").value):0))*0.85;
+    const ratio=netIncome?total/netIncome*100:0;
+    const fill=[];
+    if(shortage>0){
+      if(assetToGap)fill.push(`자산 ${formatWonShort(assetToGap)}`);
+      if(creditToGap)fill.push(`추가대출 ${formatWonShort(creditToGap)}`);
+    }
+    return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${shortage?(stillShort>0?"bad":"ok"):""}">${shortage?(fill.length?fill.join(" + "):"재원 없음")+(stillShort>0?` → 그래도 ${formatWonShort(stillShort)} 부족`:" → 해결"):"부족 없음"}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득 추정의 ${ratio.toFixed(0)}%`:""}</small></b></div><small class="qp-after-note">잔금대출 ${formatWonShort(mortgage)} (${cap.mortgageYears}년·${cap.mortgageInterestRate.toFixed(1)}%)${creditToGap?` + 추가대출 ${formatWonShort(creditToGap)} (5년·6.5%)`:""}${assetLeft?` · 남은 자산 ${formatWonShort(assetLeft)}은 잔금대출 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
+  }
   function renderQuickResult(){
     const profile=profileData();
     const aRows=candidateRows("a",profile),bRows=R.hasSecondApplicant(profile)?candidateRows("b",profile):[];
@@ -1074,7 +1095,7 @@
       else badge=`<span class="fund-badge ok">✓ 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
       if(plan){
         const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
-        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ ${esc(plan.firstShortage.label)} ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div></div>`;
+        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ ${esc(plan.firstShortage.label)} ${formatWonShort(plan.firstShortage.shortage)} 공백`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>${quickAfterPlan(plan)}</div>`;
       }
       return `<div class="quick-pick" data-pick="${index}">${badge}<div class="quick-pick-row"><div class="quick-pick-type ${pick.person==="배우자"?"pB":"pA"}"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div></div><small class="tap-hint">자금 상세 ▸</small>${detail}</div>`;
     }).join("");
