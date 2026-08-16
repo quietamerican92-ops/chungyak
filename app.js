@@ -17,7 +17,7 @@
     announceDate:"2026-08-05",
     projectName:"월계 중흥S-클래스 리비에르",
     noticeDate:"2026-07-16",
-    location:"서울특별시 노원구",
+    location:"서울특별시 노원구 월계동 487-17번지 일대",
     housingType:"private",
     priorityRegion:"서울특별시",
     priorityYears:2,
@@ -1101,10 +1101,13 @@
       const cacheKey=lawd.code+"|"+months[0];
       const trades=marketCache[cacheKey]||(marketCache[cacheKey]=(await Promise.all(months.map(ym=>fetchTrades(lawd.code,ym,key).catch(()=>[])))).flat());
       if(!trades.length){target.innerHTML=`<p class='muted'>${esc(lawd.label)} 최근 6개월 아파트 매매 실거래가 없습니다.</p>`;return}
-      const dongHint=String(notice.location||"").match(/([가-힣]+동)\b/)?.[1]||"";
-      const local=dongHint?trades.filter(t=>t.dong===dongHint):[];
-      const pool=local.length>=10?local:trades;
-      const scopeLabel=local.length>=10?`${dongHint} 기준 (${local.length}건)`:`${lawd.label} 기준 (${trades.length}건)`;
+      const dongHint=(String(notice.location||"").match(/([가-힣]{1,8}[동가읍면])(?=\s|\d|$)/g)||[]).find(token=>!/^(서울|경기|인천)/.test(token))||"";
+      const dongBase=dongHint.replace(/\d+가$/,"").replace(/동$/,"");
+      const local=dongHint?trades.filter(t=>t.dong===dongHint||(dongBase&&t.dong.replace(/\d+동$/,"").replace(/동$/,"")===dongBase)):[];
+      const forced=target.dataset.forceScope||"";
+      const useLocal=forced==="dong"?local.length>0:forced==="gu"?false:local.length>=10;
+      const pool=useLocal?local:trades;
+      const scopeLabel=useLocal?`${dongHint} 기준 (${local.length}건)`:`${lawd.label} 전체 기준 (${trades.length}건)${dongHint?` · ${dongHint} 거래 ${local.length}건으로 부족해 구 전체 사용`:" · 공고 주소에 동 정보 없음"}`;
       const groups=new Map();
       pool.forEach(t=>{const band=areaBandLabel(t.area);if(!groups.has(band))groups.set(band,[]);groups.get(band).push(t)});
       const order=["~50㎡","50~70㎡","70~90㎡","90~120㎡","120㎡~"];
@@ -1129,7 +1132,9 @@
       }).join("");
       const topApts=[...pool.reduce((m,t)=>{const k=t.name;m.set(k,(m.get(k)||[]).concat(t));return m},new Map()).entries()].sort((a,b)=>b[1].length-a[1].length).slice(0,6).map(([name,list])=>`<span class="mk-chip">${esc(name)} <b>${formatWonShort(median(list.map(t=>t.amount/(t.area/3.3058))))}/평</b> <small>${list.length}건</small></span>`).join("");
       $("marketAreaLabel").textContent=lawd.label;
-      target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외</p><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div><div class="mk-chips">${topApts}</div><p class="hint">시세는 같은 시군구(가능하면 같은 동)의 기존 아파트 실거래로, 신축 프리미엄·입지 차이는 반영되지 않습니다. 분양가가 인근 중앙값보다 크게 낮으면 경쟁이 몰리는 경향이 있습니다.</p>`;
+      const scopeToggle=dongHint&&local.length>0&&!useLocal?`<button type="button" class="mk-scope-btn" data-scope="dong">${esc(dongHint)}만 보기 (${local.length}건)</button>`:useLocal?`<button type="button" class="mk-scope-btn" data-scope="gu">${esc(lawd.label)} 전체 보기 (${trades.length}건)</button>`:"";
+      target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외 ${scopeToggle}</p><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div><div class="mk-chips">${topApts}</div><p class="hint">시세는 같은 시군구(같은 동 거래가 10건 이상이면 동 기준)의 기존 아파트 실거래로, 신축 프리미엄·입지 차이는 반영되지 않습니다. 분양가가 인근 중앙값보다 크게 낮으면 경쟁이 몰리는 경향이 있습니다.</p>`;
+      target.dataset.dong=dongHint;
     }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)} — 키가 「아파트 매매 실거래가 자료」 서비스에 활용신청되어 있는지 확인하세요.</p>`}
   }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
@@ -1694,7 +1699,13 @@
   });
   $("runCompare").addEventListener("click",runCompare);
   $("modelFill").addEventListener("click",()=>applyModelPrediction(false));
-  $("loadMarket").addEventListener("click",loadMarket);
+  $("loadMarket").addEventListener("click",()=>{$("marketResult").dataset.forceScope="";loadMarket()});
+  $("marketResult").addEventListener("click",event=>{
+    const button=event.target.closest("[data-scope]");
+    if(!button)return;
+    $("marketResult").dataset.forceScope=button.dataset.scope;
+    loadMarket();
+  });
   $("tradeApiKey").value=localStorage.getItem(TRADE_KEY_STORE)||"";
   $("tradeApiKey").addEventListener("input",()=>localStorage.setItem(TRADE_KEY_STORE,$("tradeApiKey").value.trim()));
 $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});

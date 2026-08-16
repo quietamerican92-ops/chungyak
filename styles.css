@@ -610,3 +610,5 @@ label:has(.suffix) input{padding-right:42px}
 .live-item.is-new{background:#fffbea}
 .live-new{font-style:normal;font-size:9px;font-weight:900;color:#fff;background:#e0522d;border-radius:99px;padding:2px 6px;vertical-align:middle}
 @media(max-width:760px){.gap-grid{grid-template-columns:1fr}}
+.mk-scope-btn{margin-left:8px;border:1px solid var(--line);background:#fff;color:var(--green);border-radius:99px;padding:3px 9px;font-size:10px;font-weight:900}
+.mk-scope-btn:hover{background:#f4f8f4}
