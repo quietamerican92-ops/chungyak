@@ -1130,10 +1130,30 @@
         const recent=[...list].sort((a,b)=>b.date.localeCompare(a.date))[0];
         return `<tr><td><b>${band}</b><small>${list.length}건</small></td><td>${formatWonShort(med)}</td><td>${formatWonShort(perPy)}/평</td><td>${nb?formatWonShort(nb.max):"-"}</td><td class="mk-gap ${gapCls}">${gap}</td><td><small>${esc(recent.name)} ${recent.area.toFixed(0)}㎡ ${esc(recent.floor)}층 · ${formatWonShort(recent.amount)}</small></td></tr>`;
       }).join("");
-      const topApts=[...pool.reduce((m,t)=>{const k=t.name;m.set(k,(m.get(k)||[]).concat(t));return m},new Map()).entries()].sort((a,b)=>b[1].length-a[1].length).slice(0,6).map(([name,list])=>`<span class="mk-chip">${esc(name)} <b>${formatWonShort(median(list.map(t=>t.amount/(t.area/3.3058))))}/평</b> <small>${list.length}건</small></span>`).join("");
+      // ── 단지별 시세: 대장(평당가 최고) · 신축(2015~) · 거래활발
+      const complexes=[...pool.reduce((m,t)=>{const k=t.name;m.set(k,(m.get(k)||[]).concat(t));return m},new Map()).entries()]
+        .map(([name,list])=>{
+          const perPy=median(list.map(t=>t.amount/(t.area/3.3058)));
+          const year=Math.max(...list.map(t=>parseInt(t.year,10)||0));
+          const byBand=new Map();
+          list.forEach(t=>{const b=areaBandLabel(t.area);if(!byBand.has(b))byBand.set(b,[]);byBand.get(b).push(t)});
+          const bands=[...byBand.entries()].map(([b,l])=>({band:b,n:l.length,med:median(l.map(t=>t.amount))})).sort((a,b)=>order.indexOf(a.band)-order.indexOf(b.band));
+          const latest=[...list].sort((a,b)=>b.date.localeCompare(a.date))[0];
+          return {name,list,n:list.length,perPy,year,bands,latest,dong:list[0].dong};
+        }).filter(c=>c.n>=2);
+      const nowYear=new Date().getFullYear();
+      const leaders=[...complexes].sort((a,b)=>b.perPy-a.perPy).slice(0,3);
+      const newer=complexes.filter(c=>c.year>=nowYear-11&&!leaders.includes(c)).sort((a,b)=>b.year-a.year||b.perPy-a.perPy).slice(0,3);
+      const active=complexes.filter(c=>!leaders.includes(c)&&!newer.includes(c)).sort((a,b)=>b.n-a.n).slice(0,3);
+      const noticePerPy=(()=>{const list=(notice.sizes||[]).map(s=>{const p=(notice.pricing||[]).find(r=>r.size===s.name);return p&&num(p.max)&&num(s.area)?num(p.max)/(num(s.area)/3.3058):0}).filter(Boolean);return list.length?median(list):0})();
+      const complexCard=(c,tag,tagCls)=>{
+        const gap=noticePerPy&&c.perPy?((noticePerPy/c.perPy-1)*100):null;
+        return `<div class="mk-complex"><div class="mk-complex-head"><span class="mk-tag ${tagCls}">${tag}</span><b>${esc(c.name)}</b><small>${esc(c.dong)} · ${c.year||"?"}년 · ${c.n}건</small></div><div class="mk-complex-price"><b>${formatWonShort(c.perPy)}/평</b>${gap!==null?`<em class="${gap>5?"bad":gap<-5?"ok":""}">분양가 ${gap>0?"+":""}${gap.toFixed(0)}%</em>`:""}</div><div class="mk-complex-bands">${c.bands.map(b=>`<span>${b.band} <b>${formatWonShort(b.med)}</b><small>${b.n}건</small></span>`).join("")}</div><small class="mk-complex-latest">최근 ${c.latest.date.slice(2).replaceAll("-",".")} · ${c.latest.area.toFixed(0)}㎡ ${esc(c.latest.floor)}층 ${formatWonShort(c.latest.amount)}</small></div>`;
+      };
+      const complexHtml=[...leaders.map(c=>complexCard(c,"대장","lead")),...newer.map(c=>complexCard(c,"신축","new")),...active.map(c=>complexCard(c,"거래활발","hot"))].join("");
       $("marketAreaLabel").textContent=lawd.label;
       const scopeToggle=dongHint&&local.length>0&&!useLocal?`<button type="button" class="mk-scope-btn" data-scope="dong">${esc(dongHint)}만 보기 (${local.length}건)</button>`:useLocal?`<button type="button" class="mk-scope-btn" data-scope="gu">${esc(lawd.label)} 전체 보기 (${trades.length}건)</button>`:"";
-      target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외 ${scopeToggle}</p><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div><div class="mk-chips">${topApts}</div><p class="hint">시세는 같은 시군구(같은 동 거래가 10건 이상이면 동 기준)의 기존 아파트 실거래로, 신축 프리미엄·입지 차이는 반영되지 않습니다. 분양가가 인근 중앙값보다 크게 낮으면 경쟁이 몰리는 경향이 있습니다.</p>`;
+      target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외 ${scopeToggle}</p>${noticePerPy?`<p class="mk-notice-py">이 공고 분양가 평당 <b>${formatWonShort(noticePerPy)}</b> (주택형 중앙값)</p>`:""}<div class="mk-complexes">${complexHtml||"<p class='muted'>단지별로 묶을 거래가 부족합니다.</p>"}</div><details class="fold mk-band-fold"><summary>전용면적대별 평균 (참고)</summary><div class="fold-body"><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div></div></details><p class="hint">대장 = 평당가 상위, 신축 = ${nowYear-11}년 이후 준공, 거래활발 = 거래 건수 상위. 각 카드의 "분양가 ±%"는 이 공고 평당가와 그 단지 평당가의 차이 — 신축 대장 대비 분양가가 낮을수록 안전마진이 큽니다.</p>`;
       target.dataset.dong=dongHint;
     }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)} — 키가 「아파트 매매 실거래가 자료」 서비스에 활용신청되어 있는지 확인하세요.</p>`}
   }
