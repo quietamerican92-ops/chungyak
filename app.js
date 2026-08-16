@@ -385,9 +385,12 @@
     const text=lines.join("\n");
     const projectLine=lines.find(line=>/입주자\s*모집공고/.test(line)&&line.length<90&&!/최초|현재|공고일/.test(line));
     const projectName=(projectLine||fileName.replace(/\.pdf$/i,"")).replace(/\s*입주자\s*모집공고.*$/,"").trim();
-    const dateContext=text.match(/입주자\s*모집공고일[\s\S]{0,260}?(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/);
+    // 공고일: ① "입주자모집공고일은 2026.08.07.(금)입니다" 같은 명시 문장 ② "입주자모집공고일 : 2026.08.07" 표기 ③ 첫 2쪽 상단의 날짜 ④ 최후 폴백
+    const dateExplicit=text.match(/입주자\s*모집\s*공고일\s*(?:은|:|：)?\s*(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/);
+    const headText=lines.slice(0,Math.max(60,lines.findIndex(line=>/__PAGE_3__/.test(line)))).join(" ");
+    const dateHead=headText.match(/(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/);
     const anyDate=text.match(/(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/);
-    const dm=dateContext||anyDate;
+    const dm=dateExplicit||dateHead||anyDate;
     const date=dm?`${dm[1]}-${String(dm[2]).padStart(2,"0")}-${String(dm[3]).padStart(2,"0")}`:"";
     const locationLine=lines.find(line=>/공급위치\s*:/.test(line));
     const location=locationLine?locationLine.replace(/^.*공급위치\s*:\s*/,"").split(/\s{2,}|\(/)[0].trim():"";
