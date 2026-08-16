@@ -69,7 +69,7 @@
   ];
   const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
   const NOTICE_FIELDS=["projectName","noticeDate","location","housingType","priorityRegion","priorityYears","specialMonths","generalMonths","generalHeadRequired"];
-  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","interestPaymentMode","collateralValue","annualIncome","existingAnnualDebtService","mortgageLtv","mortgageInterestRate","stressRate","dsrLimit","mortgageYears","policyScope","manualMortgageCap","taxMode","taxManualRate","includeAcquisitionTax"];
+  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","interestPaymentMode","collateralValue","annualIncome","existingAnnualDebtService","mortgageLtv","mortgageInterestRate","stressRate","dsrLimit","mortgageYears","policyScope","manualMortgageCap","taxMode","taxManualRate","includeAcquisitionTax","gapSavingExtra","gapLoanExtra","gapCredit","gapWorkLoan","gapFamily","gapAsset"];
   const FINANCE_CHECK_IDS=new Set(["includeAcquisitionTax"]);
   let notices=readStorage(NOTICES_KEY,{});
   if(!Object.keys(notices).length)notices[DEFAULT_NOTICE.id]=clone(DEFAULT_NOTICE);
@@ -842,6 +842,15 @@
     const haveRows=[["시작 현금(남길 돈 제외)",plan.usableStart],["입주까지 저축",plan.grossSavingToMoveIn],["잔금대출 한도",plan.mortgageTarget]];
     const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
     $("fundingSummary").innerHTML=`<div class="fund-cols"><div class="fund-col need"><h4>총 필요자금 <b>${formatWonShort(plan.totalCost)}</b></h4><ul>${needRows.map(([label,value])=>`<li><span>${esc(label)}</span><b>${formatWonShort(value)}</b></li>`).join("")}</ul></div><div class="fund-col have"><h4>투입 가능액 <b>${formatWonShort(haveTotal)}</b></h4><ul>${haveRows.map(([label,value])=>`<li><span>${esc(label)}</span><b>${formatWonShort(value)}</b></li>`).join("")}<li class="cap"><span>한도 결정 기준</span><b>${esc(plan.loanCapacity.binding.label)}</b></li></ul></div></div><div class="fund-net ${finalGap?"bad":"ok"}">${finalGap?`▲ 부족 ${formatWonShort(finalGap)}`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>`;
+    // 부족액 해소 재원 시나리오 (엑셀 ⑥ 참고)
+    const gapNeed=Math.max(0,plan.loanShortage||0);
+    const monthsToMoveIn=input.moveInDate&&input.contractDate?Math.max(0,Math.round(R.monthsBetween(input.contractDate,input.moveInDate))):0;
+    const gapItems=[["월 저축 추가",num($("gapSavingExtra").value)*monthsToMoveIn,`${formatWonShort(num($("gapSavingExtra").value))}/월 × ${monthsToMoveIn}개월`],["잔금대출 한도 확대",num($("gapLoanExtra").value)],["마이너스통장",num($("gapCredit").value)],["직장·교직원 대출",num($("gapWorkLoan").value)],["가족 지원·증여",num($("gapFamily").value)],["자산 매각·평가차익",num($("gapAsset").value)]];
+    const gapTotal=gapItems.reduce((sum,[,value])=>sum+value,0);
+    const gapNet=gapTotal-gapNeed;
+    $("gapTarget").textContent=gapNeed?`메워야 할 부족액 ${formatWonShort(gapNeed)}`:"현재 부족액 없음";
+    $("gapTarget").className="badge "+(gapNeed?"warn":"ok");
+    $("gapResult").innerHTML=`<ul class="gap-list">${gapItems.filter(([,value])=>value>0).map(([label,value,note])=>`<li><span>${esc(label)}${note?` <small>${esc(note)}</small>`:""}</span><b>${formatWonShort(value)}</b></li>`).join("")||"<li class='muted'>재원을 입력하면 합계가 계산됩니다.</li>"}</ul><div class="fund-net ${gapNeed?(gapNet>=0?"ok":"bad"):"ok"}">${gapNeed?(gapNet>=0?`✓ 재원 ${formatWonShort(gapTotal)} ≥ 부족 ${formatWonShort(gapNeed)} · 여유 ${formatWonShort(gapNet)}`:`▲ 재원 ${formatWonShort(gapTotal)} < 부족 ${formatWonShort(gapNeed)} · 아직 ${formatWonShort(-gapNet)} 모자람`):`부족액이 없어 추가 재원이 필요하지 않습니다${gapTotal?` (입력 재원 ${formatWonShort(gapTotal)}은 여유분)`:""}`}</div>${gapNeed&&num($("gapCredit").value)+num($("gapWorkLoan").value)>0?`<p class="hint">마이너스통장·신용대출은 DSR 산정에 포함돼 잔금대출 한도를 줄일 수 있습니다. 잔금 실행 전 상환하거나 한도 여유를 확인하세요.</p>`:""}`;
     $("scheduleFoldInfo").textContent=[input.contractDate,input.moveInDate].filter(Boolean).map(value=>value.slice(2).replaceAll("-",".")).join(" → ")||"날짜 미입력";
     $("interimFoldInfo").textContent=`${plan.interestByInstallment.length?`대출 ${plan.interestByInstallment.length}회`:"전액 자납"} · 연 ${input.interimInterestRate}%`;
     $("loanFoldInfo").textContent=`예상 한도 ${formatWonShort(plan.mortgageTarget)}`;
@@ -1047,6 +1056,82 @@
     const verifiedNote=notice.verified?"":`<span class="quick-hero-warn">⚠ 검수 전 · 원문 대조 권장</span>`;
     $("quickResult").innerHTML=`<article class="quick-hero"><div class="quick-hero-top"><span class="kicker">RECOMMENDATION</span>${verifiedNote}</div><h3>${esc(notice.projectName||"공고")}<span class="quick-hero-tag"> · 이렇게 넣으세요</span></h3><p class="quick-hero-guide">${esc(cardText)}</p><div class="quick-picks">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
   }
+  // ── 인근 실거래 시세 (국토교통부 실거래가 API, CORS 허용)
+  const TRADE_KEY_STORE="subscription_trade_key_v3";
+  const marketCache={};
+  function tradeKey(){const raw=String($("tradeApiKey")?.value||"").trim();try{return raw.includes("%")?decodeURIComponent(raw):raw}catch{return raw}}
+  function noticeLawd(){
+    const address=String(notice.location||"");
+    const map=window.LAWD_CD_MAP||{};
+    const sido=/서울/.test(address)?"서울":/인천/.test(address)?"인천":/경기/.test(address)?"경기":"";
+    if(!sido)return null;
+    const rest=address.replace(/^(서울특별시|서울시|서울|경기도|경기|인천광역시|인천시|인천)\s*/,"");
+    const parts=rest.split(/\s+/);
+    const si=parts[0]||"",gu=parts[1]||"";
+    const tries=[`${sido} ${si} ${gu}`,`${sido} ${si}${gu}`,`${sido} ${si}`];
+    for(const key of tries){const code=map[key.trim()];if(code)return {code,label:key.trim()}}
+    return null;
+  }
+  function areaBandLabel(area){return area<50?"~50㎡":area<70?"50~70㎡":area<90?"70~90㎡":area<120?"90~120㎡":"120㎡~"}
+  async function fetchTrades(code,ym,key){
+    const url=`https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade?serviceKey=${encodeURIComponent(key)}&LAWD_CD=${code}&DEAL_YMD=${ym}&pageNo=1&numOfRows=1000`;
+    const res=await fetch(url);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const xml=new DOMParser().parseFromString(await res.text(),"text/xml");
+    const codeEl=xml.querySelector("resultCode");
+    if(codeEl&&!/^0+$/.test(codeEl.textContent.trim()))throw new Error(xml.querySelector("resultMsg")?.textContent||"API 오류");
+    return [...xml.querySelectorAll("item")].map(item=>{
+      const get=tag=>item.querySelector(tag)?.textContent.trim()||"";
+      if(get("cdealType")==="O")return null;
+      const area=parseFloat(get("excluUseAr"))||0,amount=parseInt(get("dealAmount").replace(/,/g,""),10)*10000||0;
+      return {name:get("aptNm"),dong:get("umdNm"),area,amount,floor:get("floor"),year:get("buildYear"),date:`${get("dealYear")}-${String(get("dealMonth")).padStart(2,"0")}-${String(get("dealDay")).padStart(2,"0")}`};
+    }).filter(Boolean);
+  }
+  async function loadMarket(){
+    const target=$("marketResult");
+    const key=tradeKey();
+    const lawd=noticeLawd();
+    if(!key){target.innerHTML="<p class='muted'>실거래 API 키를 아래에 먼저 입력해 주세요.</p>";document.querySelector(".market-key-fold").open=true;return}
+    if(!lawd){target.innerHTML=`<p class='muted'>공고 주소(${esc(notice.location||"없음")})에서 시군구를 찾지 못했습니다. 서울·경기·인천 공고만 지원합니다.</p>`;return}
+    localStorage.setItem(TRADE_KEY_STORE,$("tradeApiKey").value.trim());
+    target.innerHTML="<p class='muted'>최근 6개월 실거래를 불러오는 중…</p>";
+    const now=new Date(),months=[];
+    for(let index=0;index<6;index++){const d=new Date(now.getFullYear(),now.getMonth()-index,1);months.push(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}`)}
+    try{
+      const cacheKey=lawd.code+"|"+months[0];
+      const trades=marketCache[cacheKey]||(marketCache[cacheKey]=(await Promise.all(months.map(ym=>fetchTrades(lawd.code,ym,key).catch(()=>[])))).flat());
+      if(!trades.length){target.innerHTML=`<p class='muted'>${esc(lawd.label)} 최근 6개월 아파트 매매 실거래가 없습니다.</p>`;return}
+      const dongHint=String(notice.location||"").match(/([가-힣]+동)\b/)?.[1]||"";
+      const local=dongHint?trades.filter(t=>t.dong===dongHint):[];
+      const pool=local.length>=10?local:trades;
+      const scopeLabel=local.length>=10?`${dongHint} 기준 (${local.length}건)`:`${lawd.label} 기준 (${trades.length}건)`;
+      const groups=new Map();
+      pool.forEach(t=>{const band=areaBandLabel(t.area);if(!groups.has(band))groups.set(band,[]);groups.get(band).push(t)});
+      const order=["~50㎡","50~70㎡","70~90㎡","90~120㎡","120㎡~"];
+      const median=values=>{const s=[...values].sort((a,b)=>a-b);return s.length?s[Math.floor(s.length/2)]:0};
+      const noticeBands=new Map();
+      (notice.sizes||[]).forEach(size=>{
+        const price=(notice.pricing||[]).find(row=>row.size===size.name);
+        if(!price||!num(price.max))return;
+        const band=areaBandLabel(num(size.area));
+        if(!noticeBands.has(band))noticeBands.set(band,{max:0,areas:[]});
+        const g=noticeBands.get(band);g.max=Math.max(g.max,num(price.max));g.areas.push(size.name);
+      });
+      const rows=order.filter(band=>groups.has(band)).map(band=>{
+        const list=groups.get(band);
+        const med=median(list.map(t=>t.amount));
+        const perPy=median(list.map(t=>t.amount/(t.area/3.3058)));
+        const nb=noticeBands.get(band);
+        const gap=nb?`${nb.max>med?"+":""}${((nb.max/med-1)*100).toFixed(0)}%`:"-";
+        const gapCls=nb?(nb.max>med*1.05?"bad":nb.max<med*0.95?"ok":""):"";
+        const recent=[...list].sort((a,b)=>b.date.localeCompare(a.date))[0];
+        return `<tr><td><b>${band}</b><small>${list.length}건</small></td><td>${formatWonShort(med)}</td><td>${formatWonShort(perPy)}/평</td><td>${nb?formatWonShort(nb.max):"-"}</td><td class="mk-gap ${gapCls}">${gap}</td><td><small>${esc(recent.name)} ${recent.area.toFixed(0)}㎡ ${esc(recent.floor)}층 · ${formatWonShort(recent.amount)}</small></td></tr>`;
+      }).join("");
+      const topApts=[...pool.reduce((m,t)=>{const k=t.name;m.set(k,(m.get(k)||[]).concat(t));return m},new Map()).entries()].sort((a,b)=>b[1].length-a[1].length).slice(0,6).map(([name,list])=>`<span class="mk-chip">${esc(name)} <b>${formatWonShort(median(list.map(t=>t.amount/(t.area/3.3058))))}/평</b> <small>${list.length}건</small></span>`).join("");
+      $("marketAreaLabel").textContent=lawd.label;
+      target.innerHTML=`<p class="mk-scope">${esc(scopeLabel)} · 최근 6개월 매매 · 취소분 제외</p><div class="table-wrap"><table class="mk-table"><thead><tr><th>전용</th><th>실거래 중앙값</th><th>평당</th><th>이 공고 최고가</th><th>분양가 vs 시세</th><th>최근 거래 예</th></tr></thead><tbody>${rows}</tbody></table></div><div class="mk-chips">${topApts}</div><p class="hint">시세는 같은 시군구(가능하면 같은 동)의 기존 아파트 실거래로, 신축 프리미엄·입지 차이는 반영되지 않습니다. 분양가가 인근 중앙값보다 크게 낮으면 경쟁이 몰리는 경향이 있습니다.</p>`;
+    }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)} — 키가 「아파트 매매 실거래가 자료」 서비스에 활용신청되어 있는지 확인하세요.</p>`}
+  }
   const APPLYHOME_KEY_STORE="subscription_applyhome_key_v3";
   const APPLYHOME_BASE="https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1";
   let applyhomeLastRates=[],applyhomeLastHouse="";
@@ -1199,16 +1284,41 @@
         .filter(row=>row.no&&(row.end>=today||row.notice>=addDaysStr(-35)))
         .sort((a,b)=>statusOrder[liveStatus(a).cls]-statusOrder[liveStatus(b).cls]||String(a.end).localeCompare(String(b.end)));
       localStorage.setItem(LIVE_CACHE_KEY,JSON.stringify({date:today,rows:liveNotices}));
+      notifyNewNotices(liveNotices);
       if(liveNotices.length)startLiveRotation();
       else $("liveBannerText").textContent="현재 서울·경기에 진행 중인 모집공고가 없습니다";
     }catch(error){$("liveBannerText").textContent="실시간 공고 조회 실패 — 인증키와 트래픽을 확인하세요"}
   }
+  const SEEN_KEY="subscription_seen_notices_v3";
+  let newNoticeIds=new Set();
+  function notifyNewNotices(rows){
+    const seen=new Set(readStorage(SEEN_KEY,[]));
+    const firstRun=seen.size===0;
+    const fresh=rows.filter(row=>!seen.has(row.no));
+    localStorage.setItem(SEEN_KEY,JSON.stringify([...new Set([...seen,...rows.map(row=>row.no)])].slice(-500)));
+    if(firstRun||!fresh.length)return;
+    newNoticeIds=new Set(fresh.map(row=>row.no));
+    const title=`새 청약공고 ${fresh.length}건`;
+    const body=fresh.slice(0,3).map(row=>`[${row.area}${row.kind?"·"+row.kind:""}] ${row.name}`).join("\n")+(fresh.length>3?`\n외 ${fresh.length-3}건`:"");
+    toast(`🔔 ${title}: ${fresh[0].name}${fresh.length>1?` 외 ${fresh.length-1}건`:""}`);
+    if("Notification"in window&&Notification.permission==="granted"){
+      try{new Notification(title,{body,icon:"./icon.svg",tag:"new-notices"})}catch{}
+    }
+  }
+  function requestNotifyPermission(){
+    if(!("Notification"in window)){toast("이 브라우저는 알림을 지원하지 않습니다.");return}
+    Notification.requestPermission().then(permission=>{
+      toast(permission==="granted"?"알림이 켜졌습니다. 앱을 열 때 새 공고가 있으면 알려드립니다.":"알림 권한이 거부되었습니다.");
+      renderLiveList();
+    });
+  }
   function renderLiveList(){
     const items=liveNotices.length?liveNotices.map(row=>{
       const status=liveStatus(row);
-      return `<button type="button" class="live-item" data-live-house="${esc(row.no)}"><span class="live-status ${status.cls}">${esc(status.label)}</span><b>${esc(row.name)}${row.kind?` <i class="live-kind">${esc(row.kind)}</i>`:""}</b><small>${esc(row.area)} · 공고 ${esc(row.notice)}${row.announce?` · 발표 ${esc(row.announce)}`:""}</small></button>`;
+      return `<button type="button" class="live-item ${newNoticeIds.has(row.no)?"is-new":""}" data-live-house="${esc(row.no)}"><span class="live-status ${status.cls}">${esc(status.label)}</span><b>${newNoticeIds.has(row.no)?'<i class="live-new">NEW</i> ':""}${esc(row.name)}${row.kind?` <i class="live-kind">${esc(row.kind)}</i>`:""}</b><small>${esc(row.area)} · 공고 ${esc(row.notice)}${row.announce?` · 발표 ${esc(row.announce)}`:""}</small></button>`;
     }).join(""):`<div class="live-empty">표시할 공고가 없습니다. 인증키 등록 후 새로고침해 주세요.</div>`;
-    $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><button type="button" id="liveRefresh">목록 지금 새로고침</button><small>공공데이터 API는 청약홈 사이트 게시보다 최대 하루가량 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
+    const notifyState=!("Notification"in window)?"":Notification.permission==="granted"?`<small class="notify-on">🔔 새 공고 알림 켜짐 — 앱을 열 때 지난 방문 이후 올라온 공고를 알려드립니다</small>`:`<button type="button" id="notifyEnable">🔔 새 공고 알림 켜기</button>`;
+    $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><div class="live-foot-row"><button type="button" id="liveRefresh">목록 지금 새로고침</button>${notifyState}</div><small>공공데이터 API는 청약홈 사이트 게시보다 최대 하루가량 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
   }
   async function applyRemoteNotice(house){
     const key=applyhomeKey();
@@ -1570,6 +1680,7 @@
     else{setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus()}
   });
   $("liveBannerList").addEventListener("click",async event=>{
+    if(event.target.closest("#notifyEnable")){requestNotifyPermission();return}
     if(event.target.closest("#liveRefresh")){
       localStorage.removeItem(LIVE_CACHE_KEY);
       $("liveBannerText").textContent="서울·경기 실시간 공고 다시 불러오는 중…";
@@ -1583,6 +1694,9 @@
   });
   $("runCompare").addEventListener("click",runCompare);
   $("modelFill").addEventListener("click",()=>applyModelPrediction(false));
+  $("loadMarket").addEventListener("click",loadMarket);
+  $("tradeApiKey").value=localStorage.getItem(TRADE_KEY_STORE)||"";
+  $("tradeApiKey").addEventListener("input",()=>localStorage.setItem(TRADE_KEY_STORE,$("tradeApiKey").value.trim()));
 $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderFundingPlan()});
   $("optionChoices").addEventListener("change",event=>{if(!event.target.matches("[data-option-id]"))return;updateOptionSummary();saveFundingInputs();renderFundingPlan()});
   $("interimFundingChoices").addEventListener("change",event=>{if(!event.target.matches("[data-interim-mode]"))return;saveFundingInputs();renderFundingPlan()});

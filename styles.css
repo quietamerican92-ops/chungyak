@@ -583,3 +583,30 @@ label:has(.suffix) input{padding-right:42px}
 .quick-pick-empty{border-style:dashed;opacity:.9;cursor:default}
 .quick-pick-empty .quick-pick-type b{color:#c9d6cc;font-size:13px}
 .qp-why{display:block;font-size:10px;line-height:1.6;color:#e8d5ae}
+
+/* Market (실거래), gap scenario, new-notice notify */
+.qn-sub{font-size:11px;color:var(--muted);font-weight:800;margin-left:6px}
+.market-result{margin-top:10px}
+.mk-scope{margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:800}
+.mk-table{width:100%;min-width:640px;border-collapse:collapse}
+.mk-table th{font-size:10px;padding:6px 7px;background:#f1f4f1;white-space:nowrap}
+.mk-table td{font-size:11px;padding:7px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mk-table td:first-child,.mk-table td:last-child{text-align:left}
+.mk-table td small{display:block;font-size:9px;color:var(--muted);font-weight:700}
+.mk-gap{font-weight:900}.mk-gap.ok{color:#0b5c38}.mk-gap.bad{color:#a12626}
+.mk-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.mk-chip{font-size:10px;background:#f4f7ef;border:1px solid #dbe6cf;border-radius:99px;padding:5px 9px;color:#39463c;font-weight:800}
+.mk-chip b{color:var(--green)}.mk-chip small{color:var(--muted)}
+.market-key-fold{margin-top:10px}
+.gap-card{margin-top:16px}
+.gap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.gap-list{list-style:none;margin:12px 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.gap-list li{display:flex;justify-content:space-between;gap:10px;font-size:12px}
+.gap-list li span{color:#3d463f;font-weight:700}.gap-list li small{color:var(--muted);font-weight:700}
+.gap-list li b{font-variant-numeric:tabular-nums}
+.live-foot-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.live-foot-row #notifyEnable{border:1px solid #d9cfc0;background:#fff7ee;color:#8a3e00;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900}
+.notify-on{font-size:10px;color:#0b5c38;font-weight:800}
+.live-item.is-new{background:#fffbea}
+.live-new{font-style:normal;font-size:9px;font-weight:900;color:#fff;background:#e0522d;border-radius:99px;padding:2px 6px;vertical-align:middle}
+@media(max-width:760px){.gap-grid{grid-template-columns:1fr}}

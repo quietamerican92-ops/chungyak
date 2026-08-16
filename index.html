@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-9">
+  <link rel="stylesheet" href="./styles.css?v=20260810-10">
 </head>
 <body>
   <header class="hero">
@@ -54,6 +54,21 @@
       <article class="card quick-card">
         <h3><span class="quick-step">2</span> 타입별·유형별 물량</h3>
         <div id="quickSupplyTable" class="table-wrap"></div>
+      </article>
+
+      <article class="card quick-card">
+        <div class="quick-pdf-row">
+          <h3><span class="quick-step">＋</span> 인근 실거래 시세 <small class="qn-sub" id="marketAreaLabel"></small></h3>
+          <button id="loadMarket" class="ghost file-button-sm" type="button">최근 6개월 시세 조회</button>
+        </div>
+        <div id="marketResult" class="market-result"></div>
+        <details class="fold market-key-fold">
+          <summary>실거래가 API 키 (최초 1회)</summary>
+          <div class="fold-body">
+            <p class="hint">공공데이터포털 「국토교통부 아파트 매매 실거래가 자료」(RTMSDataSvcAptTrade) 활용신청 후 발급되는 일반 인증키를 넣으세요. 청약홈 키와는 별개이며 이 기기에만 저장됩니다.</p>
+            <label>실거래 API 키<input id="tradeApiKey" type="password" autocomplete="off" placeholder="serviceKey"></label>
+          </div>
+        </details>
       </article>
 
       <article class="card quick-card">
@@ -486,6 +501,19 @@
         <div id="fundingSummary" class="funding-compare"></div>
       </article>
 
+      <article class="card gap-card">
+        <div class="card-head"><div><h3>부족액 해소 재원 시나리오</h3><p>부족하면 어디서 메울지 — 항목별 금액을 넣으면 과부족이 즉시 계산됩니다.</p></div><span id="gapTarget" class="badge warn"></span></div>
+        <div class="gap-grid">
+          <label>월 저축 추가<input id="gapSavingExtra" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원/월</span></label>
+          <label>잔금대출 한도 확대<input id="gapLoanExtra" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+          <label>마이너스통장<input id="gapCredit" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+          <label>직장·교직원 대출<input id="gapWorkLoan" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+          <label>가족 지원·증여<input id="gapFamily" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+          <label>자산 매각·평가차익<input id="gapAsset" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+        </div>
+        <div id="gapResult" class="gap-result"></div>
+      </article>
+
       <details class="fold result-fold">
         <summary>중도금 이자 상세 <span class="fold-info" id="interestFoldInfo"></span></summary>
         <div class="fold-body">
@@ -514,8 +542,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-9"></script>
-  <script src="./model-data.js?v=20260810-9"></script>
-  <script src="./app.js?v=20260810-9"></script>
+  <script src="./rules.js?v=20260810-10"></script>
+  <script src="./model-data.js?v=20260810-10"></script>
+  <script src="./lawd-map.js?v=20260810-10"></script>
+  <script src="./app.js?v=20260810-10"></script>
 </body>
 </html>
