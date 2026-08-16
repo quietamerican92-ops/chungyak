@@ -1059,7 +1059,10 @@
   // ── 인근 실거래 시세 (국토교통부 실거래가 API, CORS 허용)
   const TRADE_KEY_STORE="subscription_trade_key_v3";
   const marketCache={};
-  function tradeKey(){const raw=String($("tradeApiKey")?.value||"").trim();try{return raw.includes("%")?decodeURIComponent(raw):raw}catch{return raw}}
+  function tradeKey(){
+    const raw=String($("tradeApiKey")?.value||"").trim()||String($("applyhomeKey")?.value||"").trim();
+    try{return raw.includes("%")?decodeURIComponent(raw):raw}catch{return raw}
+  }
   function noticeLawd(){
     const address=String(notice.location||"");
     const map=window.LAWD_CD_MAP||{};
