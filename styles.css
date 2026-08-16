@@ -629,3 +629,4 @@ label:has(.suffix) input{padding-right:42px}
 .mk-complex-bands span b{color:var(--ink)}.mk-complex-bands span small{margin-left:3px}
 .mk-complex-latest{font-size:9px;color:var(--muted);font-weight:700}
 .mk-band-fold{margin-top:10px}
+.mk-nomatch{font-size:9px;color:var(--muted);font-weight:700}
