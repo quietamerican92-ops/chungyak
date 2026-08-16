@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-15">
+  <link rel="stylesheet" href="./styles.css?v=20260810-16">
 </head>
 <body>
   <header class="hero">
@@ -514,6 +514,19 @@
         <div id="gapResult" class="gap-result"></div>
       </article>
 
+      <article class="card repay-card">
+        <div class="card-head"><div><h3>입주 후 월 상환액</h3><p>잔금대출 원리금에 부족액 재원으로 쓴 대출(마이너스통장·직장대출)의 상환까지 합산합니다. 보유 자산의 평가차익을 잔금 때 팔아 넣으면 상환 부담이 얼마나 줄어드는지도 봅니다.</p></div></div>
+        <div class="gap-grid">
+          <label>마이너스통장·직장대출 금리<input id="repayCreditRate" type="number" min="0" max="30" step="0.1" value="6.5"><span class="suffix">%</span></label>
+          <label>마이너스통장·직장대출 상환기간<input id="repayCreditYears" type="number" min="1" max="30" value="5"><span class="suffix">년</span></label>
+          <label>보유 주식·자산 현재 평가액<input id="repayAssetValue" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+          <label>입주 시점까지 기대 수익률<input id="repayAssetReturn" type="number" min="-100" max="300" step="1" value="0"><span class="suffix">%</span><small class="field-help">예: 잔금까지 3년 · 연 7% 복리면 약 22%</small></label>
+          <label>잔금에 투입할 비율<input id="repayAssetUse" type="number" min="0" max="100" step="5" value="100"><span class="suffix">%</span></label>
+          <label>월 세후 소득(참고)<input id="repayNetIncome" class="money-input" type="text" inputmode="numeric" value="0"><span class="suffix">원</span></label>
+        </div>
+        <div id="repayResult" class="repay-result"></div>
+      </article>
+
       <details class="fold result-fold">
         <summary>중도금 이자 상세 <span class="fold-info" id="interestFoldInfo"></span></summary>
         <div class="fold-body">
@@ -542,9 +555,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-15"></script>
-  <script src="./model-data.js?v=20260810-15"></script>
-  <script src="./lawd-map.js?v=20260810-15"></script>
-  <script src="./app.js?v=20260810-15"></script>
+  <script src="./rules.js?v=20260810-16"></script>
+  <script src="./model-data.js?v=20260810-16"></script>
+  <script src="./lawd-map.js?v=20260810-16"></script>
+  <script src="./app.js?v=20260810-16"></script>
 </body>
 </html>

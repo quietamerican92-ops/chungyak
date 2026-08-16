@@ -69,7 +69,7 @@
   ];
   const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
   const NOTICE_FIELDS=["projectName","noticeDate","location","housingType","priorityRegion","priorityYears","specialMonths","generalMonths","generalHeadRequired"];
-  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","interestPaymentMode","collateralValue","annualIncome","existingAnnualDebtService","mortgageLtv","mortgageInterestRate","stressRate","dsrLimit","mortgageYears","policyScope","manualMortgageCap","taxMode","taxManualRate","includeAcquisitionTax","gapSavingExtra","gapLoanExtra","gapCredit","gapWorkLoan","gapFamily","gapAsset"];
+  const FINANCE_IDS=["planSize","planPrice","planExtras","cashNow","cashReserve","monthlySaving","contractDate","moveInDate","interimInterestRate","interestPaymentMode","collateralValue","annualIncome","existingAnnualDebtService","mortgageLtv","mortgageInterestRate","stressRate","dsrLimit","mortgageYears","policyScope","manualMortgageCap","taxMode","taxManualRate","includeAcquisitionTax","gapSavingExtra","gapLoanExtra","gapCredit","gapWorkLoan","gapFamily","gapAsset","repayCreditRate","repayCreditYears","repayAssetValue","repayAssetReturn","repayAssetUse","repayNetIncome"];
   const FINANCE_CHECK_IDS=new Set(["includeAcquisitionTax"]);
   let notices=readStorage(NOTICES_KEY,{});
   if(!Object.keys(notices).length)notices[DEFAULT_NOTICE.id]=clone(DEFAULT_NOTICE);
@@ -851,6 +851,29 @@
     $("gapTarget").textContent=gapNeed?`메워야 할 부족액 ${formatWonShort(gapNeed)}`:"현재 부족액 없음";
     $("gapTarget").className="badge "+(gapNeed?"warn":"ok");
     $("gapResult").innerHTML=`<ul class="gap-list">${gapItems.filter(([,value])=>value>0).map(([label,value,note])=>`<li><span>${esc(label)}${note?` <small>${esc(note)}</small>`:""}</span><b>${formatWonShort(value)}</b></li>`).join("")||"<li class='muted'>재원을 입력하면 합계가 계산됩니다.</li>"}</ul><div class="fund-net ${gapNeed?(gapNet>=0?"ok":"bad"):"ok"}">${gapNeed?(gapNet>=0?`✓ 재원 ${formatWonShort(gapTotal)} ≥ 부족 ${formatWonShort(gapNeed)} · 여유 ${formatWonShort(gapNet)}`:`▲ 재원 ${formatWonShort(gapTotal)} < 부족 ${formatWonShort(gapNeed)} · 아직 ${formatWonShort(-gapNet)} 모자람`):`부족액이 없어 추가 재원이 필요하지 않습니다${gapTotal?` (입력 재원 ${formatWonShort(gapTotal)}은 여유분)`:""}`}</div>${gapNeed&&num($("gapCredit").value)+num($("gapWorkLoan").value)>0?`<p class="hint">마이너스통장·신용대출은 DSR 산정에 포함돼 잔금대출 한도를 줄일 수 있습니다. 잔금 실행 전 상환하거나 한도 여유를 확인하세요.</p>`:""}`;
+    // ── 입주 후 월 상환액 + 자산 차익 반영
+    (()=>{
+      const cap=plan.loanCapacity;
+      const rateM=cap.mortgageInterestRate,yearsM=cap.mortgageYears;
+      const creditPrincipal=num($("gapCredit").value)+num($("gapWorkLoan").value);
+      const creditRate=num($("repayCreditRate").value),creditYears=Math.max(1,num($("repayCreditYears").value)||5);
+      const assetValue=num($("repayAssetValue").value),assetReturn=num($("repayAssetReturn").value)/100,assetUse=Math.max(0,Math.min(100,num($("repayAssetUse").value)))/100;
+      const assetAtMoveIn=assetValue*(1+assetReturn),assetInject=assetAtMoveIn*assetUse,assetGain=assetValue*assetReturn*assetUse;
+      const netIncome=num($("repayNetIncome").value);
+      // 잔금대출 필요액: 계획대로면 min(필요, 한도) + 부족분을 한도확대로 메운 만큼
+      const baseMortgage=Math.min(plan.mortgageRequired,cap.estimatedLimit)+Math.min(num($("gapLoanExtra").value),Math.max(0,plan.loanShortage));
+      const mortgageAfterAsset=Math.max(0,baseMortgage-assetInject);
+      const creditAfterAsset=Math.max(0,creditPrincipal-Math.max(0,assetInject-baseMortgage));
+      const pmt=(principal,rate,years)=>principal>0?Math.round(monthlyLoanPayment(principal,rate,years)):0;
+      const rows=[
+        {label:"잔금대출 원리금",before:pmt(baseMortgage,rateM,yearsM),after:pmt(mortgageAfterAsset,rateM,yearsM),note:`${yearsM}년 · ${rateM.toFixed(1)}%`,p0:baseMortgage,p1:mortgageAfterAsset},
+        ...(creditPrincipal>0?[{label:"마이너스통장·직장대출 상환",before:pmt(creditPrincipal,creditRate,creditYears),after:pmt(creditAfterAsset,creditRate,creditYears),note:`${creditYears}년 · ${creditRate.toFixed(1)}%`,p0:creditPrincipal,p1:creditAfterAsset}]:[])
+      ];
+      const totalBefore=rows.reduce((s,r)=>s+r.before,0),totalAfter=rows.reduce((s,r)=>s+r.after,0);
+      const dtiBefore=netIncome?totalBefore/netIncome*100:0,dtiAfter=netIncome?totalAfter/netIncome*100:0;
+      const hasAsset=assetInject>0;
+      $("repayResult").innerHTML=`<div class="table-wrap"><table class="repay-table"><thead><tr><th>항목</th><th>대출 원금</th><th>월 상환액</th>${hasAsset?`<th>자산 투입 후 원금</th><th>자산 투입 후 월 상환</th>`:""}</tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.label)}</b><small>${esc(r.note)}</small></td><td>${formatWonShort(r.p0)}</td><td><b>${formatWon(r.before)}</b></td>${hasAsset?`<td>${formatWonShort(r.p1)}</td><td><b class="${r.after<r.before?"ok":""}">${formatWon(r.after)}</b></td>`:""}</tr>`).join("")}</tbody><tfoot><tr><td>합계 (월)</td><td></td><td><b>${formatWon(totalBefore)}</b>${netIncome?`<small>세후소득의 ${dtiBefore.toFixed(0)}%</small>`:""}</td>${hasAsset?`<td></td><td><b class="ok">${formatWon(totalAfter)}</b>${netIncome?`<small>세후소득의 ${dtiAfter.toFixed(0)}%</small>`:""}</td>`:""}</tr></tfoot></table></div>${hasAsset?`<div class="fund-net ok">자산 ${formatWonShort(assetValue)} → 입주 시 ${formatWonShort(assetAtMoveIn)}(차익 ${assetGain>=0?"+":""}${formatWonShort(assetGain)}) 중 ${(assetUse*100).toFixed(0)}% 투입 → <b>월 상환 ${formatWon(totalBefore-totalAfter)} 감소</b> · 총이자 절감 약 ${formatWonShort(Math.max(0,(totalBefore-totalAfter)*yearsM*12-(baseMortgage-mortgageAfterAsset)))}</div>`:""}${netIncome&&dtiBefore>40?`<p class="hint">월 상환액이 세후소득의 40%를 넘습니다. 일반적으로 30~35% 이내가 안전권으로 봅니다.</p>`:""}<p class="hint">주식·펀드 차익은 매도 시 양도세·수수료가 있을 수 있고 가격 변동 위험이 있으니 보수적으로 잡으세요. 자산은 잔금대출을 먼저 줄이고, 남으면 고금리 대출(마이너스통장) 순으로 상환하는 것으로 계산했습니다.</p>`;
+    })();
     $("scheduleFoldInfo").textContent=[input.contractDate,input.moveInDate].filter(Boolean).map(value=>value.slice(2).replaceAll("-",".")).join(" → ")||"날짜 미입력";
     $("interimFoldInfo").textContent=`${plan.interestByInstallment.length?`대출 ${plan.interestByInstallment.length}회`:"전액 자납"} · 연 ${input.interimInterestRate}%`;
     $("loanFoldInfo").textContent=`예상 한도 ${formatWonShort(plan.mortgageTarget)}`;
@@ -1158,7 +1181,8 @@
       const noticePerPy=(()=>{const list=(notice.sizes||[]).map(s=>{const p=(notice.pricing||[]).find(r=>r.size===s.name);return p&&num(p.max)&&num(s.area)?num(p.max)/(num(s.area)/3.3058):0}).filter(Boolean);return list.length?median(list):0})();
       const complexCard=(c,tag,tagCls)=>{
         const gap=noticePerPy&&c.perPy?((noticePerPy/c.perPy-1)*100):null;
-        return `<div class="mk-complex"><div class="mk-complex-head"><span class="mk-tag ${tagCls}">${tag}</span><b>${esc(c.name)}</b><small>${esc(c.dong)} · ${c.year||"?"}년 · ${c.n}건</small></div><div class="mk-complex-price"><b>${formatWonShort(c.perPy)}/평</b>${gap!==null?`<em class="${gap>5?"bad":gap<-5?"ok":""}">분양가 ${gap>0?"+":""}${gap.toFixed(0)}%</em>`:""}</div><div class="mk-complex-bands">${c.bands.length?c.bands.map(b=>`<span title="전용 ${b.range} 거래 ${b.n}건">${b.band} <b>${formatWonShort(b.med)}</b><small>${b.n}건${b.noticeMax?` · 분양가 ${b.noticeMax>b.med?"+":""}${((b.noticeMax/b.med-1)*100).toFixed(0)}%`:""}</small></span>`).join(""):`<span class="mk-nomatch">이 공고 평형(${noticeAreas.map(a=>a.label).join("·")}㎡)과 겹치는 거래 없음</span>`}</div><small class="mk-complex-latest">최근 ${c.latest.date.slice(2).replaceAll("-",".")} · ${c.latest.area.toFixed(0)}㎡ ${esc(c.latest.floor)}층 ${formatWonShort(c.latest.amount)}</small></div>`;
+        const bandChips=c.bands.length?c.bands.map(b=>{const g=b.noticeMax?((b.noticeMax/b.med-1)*100):null;return `<div class="mk-band-chip" title="전용 ${b.range} 거래 ${b.n}건"><span class="mk-band-label">${b.band}</span><b>${formatWonShort(b.med)}</b><small>${b.n}건${g!==null?` · <i class="${g>5?"bad":g<-5?"ok":""}">분양가 ${g>0?"+":""}${g.toFixed(0)}%</i>`:""}</small></div>`}).join(""):`<span class="mk-nomatch">이 공고 평형(${noticeAreas.map(a=>a.label).join("·")}㎡)과<br>겹치는 거래 없음</span>`;
+        return `<div class="mk-complex"><div class="mk-complex-left"><div class="mk-complex-head"><span class="mk-tag ${tagCls}">${tag}</span><b>${esc(c.name)}</b><small>${esc(c.dong)} · ${c.year||"?"}년 · ${c.n}건</small></div><div class="mk-complex-price"><b>${formatWonShort(c.perPy)}/평</b>${gap!==null?`<em class="${gap>5?"bad":gap<-5?"ok":""}">분양가 ${gap>0?"+":""}${gap.toFixed(0)}%</em>`:""}</div><small class="mk-complex-latest">최근 ${c.latest.date.slice(2).replaceAll("-",".")} · ${c.latest.area.toFixed(0)}㎡ ${esc(c.latest.floor)}층 ${formatWonShort(c.latest.amount)}</small></div><div class="mk-complex-right">${bandChips}</div></div>`;
       };
       const complexHtml=[...leaders.map(c=>complexCard(c,"대장","lead")),...newer.map(c=>complexCard(c,"신축","new")),...active.map(c=>complexCard(c,"거래활발","hot"))].join("");
       $("marketAreaLabel").textContent=lawd.label;

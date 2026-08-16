@@ -630,3 +630,23 @@ label:has(.suffix) input{padding-right:42px}
 .mk-complex-latest{font-size:9px;color:var(--muted);font-weight:700}
 .mk-band-fold{margin-top:10px}
 .mk-nomatch{font-size:9px;color:var(--muted);font-weight:700}
+/* 시세 카드: 좌(단지 정보) / 우(평형별 칩) */
+.mk-complex{flex-direction:row;align-items:stretch;gap:12px}
+.mk-complex-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.mk-complex-right{flex:none;display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:118px;padding-left:12px;border-left:1px dashed #cfdccf}
+.mk-band-chip{display:flex;flex-direction:column;gap:1px;background:#fff;border:1px solid #cfdccf;border-radius:11px;padding:7px 10px;text-align:right}
+.mk-band-label{font-size:10px;font-weight:900;color:var(--green)}
+.mk-band-chip b{font-size:15px;color:var(--ink);letter-spacing:-.02em}
+.mk-band-chip small{font-size:9px;color:var(--muted);font-weight:800}
+.mk-band-chip i{font-style:normal;font-weight:900;color:#5c655e}.mk-band-chip i.bad{color:#a12626}.mk-band-chip i.ok{color:#0b5c38}
+.mk-complexes{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+@media(max-width:760px){.mk-complexes{grid-template-columns:1fr}.mk-complex-right{min-width:104px}}
+.repay-card{margin-top:16px}
+.repay-table{width:100%;min-width:560px;border-collapse:collapse}
+.repay-table th{font-size:10px;padding:7px 8px;background:#f1f4f1;white-space:nowrap}
+.repay-table td{font-size:12px;padding:8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.repay-table td:first-child{text-align:left}
+.repay-table td small{display:block;font-size:9px;color:var(--muted);font-weight:700}
+.repay-table tfoot td{font-weight:900;background:#f3f7f2}
+.repay-table b.ok{color:#0b5c38}
+.repay-result{margin-top:12px}
