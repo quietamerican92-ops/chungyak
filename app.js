@@ -1021,13 +1021,19 @@
     });
     const now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
     const area=num((notice.sizes||[]).find(row=>row.name===sizeName)?.area);
-    const annualIncome=(num($("aMonthlyIncome").value)+(R.hasLegalSpouse(profileData())?num($("bMonthlyIncome").value):0))*12;
+    // 간편 모드에서는 간편 입력값을 직접 읽어 계산 (상세 필드 동기화 지연·잔존값 영향 차단)
+    const simple=document.body.classList.contains("simple-mode")&&$("quickCash");
+    const married=R.hasLegalSpouse(profileData());
+    const cashNow=simple?num($("quickCash").value):num($("cashNow").value);
+    const monthlySaving=simple?num($("quickSaving").value):num($("monthlySaving").value);
+    const annualIncome=simple?(num($("quickIncomeA").value)+(married?num($("quickIncomeB").value):0))*12:(num($("aMonthlyIncome").value)+(married?num($("bMonthlyIncome").value):0))*12;
+    const mRate=simple?(num($("quickMortgageRate").value)||4.5):4.5,mYears=simple?(num($("quickMortgageYears").value)||30):30;
     return R.buildFundingPlan({
       baseDate:today,price,extras:R.acquisitionCostEstimate(price,area,{mode:"standard"}).total,
-      cashNow:num($("cashNow").value),reserve:0,monthlySaving:num($("monthlySaving").value),
+      cashNow,reserve:0,monthlySaving,
       contractDate:notice.expectedContractDate||"",moveInDate:notice.expectedMoveInDate||"",
       interimInterestRate:4.5,interestPaymentMode:"deferred",
-      annualIncome,collateralValue:price,mortgageLtv:40,mortgageInterestRate:4.5,stressRate:1.5,dsrLimit:40,mortgageYears:30,
+      annualIncome,collateralValue:price,mortgageLtv:40,mortgageInterestRate:mRate,stressRate:1.5,dsrLimit:40,mortgageYears:mYears,
       policyScope:/(서울|경기|인천)/.test(String(notice.location||notice.priorityRegion||""))?"capital":"none",
       payments
     });
