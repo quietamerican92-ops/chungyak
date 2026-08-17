@@ -244,6 +244,14 @@
     return clusters;
   }
 
+  function floorLabelForEntry(entry){
+    const prefix=entry.line.slice(0,entry.moneyStart).trim();
+    // "5~9층", "2 층", "15층 이상", "101동 303호" 등에서 층/호 표기 추출 (뒤에서부터 탐색)
+    let match=prefix.match(/(\d{1,2}\s*[~∼\-–]\s*\d{1,2}\s*층(?:\s*(?:이상|이하))?|\d{1,2}\s*층(?:\s*(?:이상|이하))?|(?:최상|최하|탑|저)\s*층|\d{3,4}\s*호(?:\s*(?:외\s*\d+)?)?)\s*(?:\d+\s*)?$/);
+    if(match)return match[1].replace(/\s+/g,"");
+    match=prefix.match(/(\d{1,2}\s*[~∼\-–]\s*\d{1,2}\s*층|\d{1,2}\s*층)/g);
+    return match?match[match.length-1].replace(/\s+/g,""):"";
+  }
   function unitsForPriceEntry(entry){
     const prefix=entry.line.slice(0,entry.moneyStart).trim();
     let match=prefix.match(/(?:층|F)\s*(?:이상|이하)?\s*(\d+)\s*$/i);
@@ -383,7 +391,13 @@
       const detailMap=new Map();
       (byName.get(size.name)||[]).forEach(entry=>{
         const prior=detailMap.get(entry.price);
-        if(!prior||entry.paymentAmounts.length>prior.paymentAmounts.length)detailMap.set(entry.price,{price:entry.price,paymentAmounts:entry.paymentAmounts});
+        const floor=floorLabelForEntry(entry),units=unitsForPriceEntry(entry);
+        if(!prior)detailMap.set(entry.price,{price:entry.price,paymentAmounts:entry.paymentAmounts,floors:floor?[floor]:[],units});
+        else{
+          if(entry.paymentAmounts.length>prior.paymentAmounts.length)prior.paymentAmounts=entry.paymentAmounts;
+          if(floor&&!prior.floors.includes(floor))prior.floors.push(floor);
+          prior.units=(prior.units||0)+units;
+        }
       });
       const details=[...detailMap.values()].sort((a,b)=>a.price-b.price);
       const options=details.map(detail=>detail.price);

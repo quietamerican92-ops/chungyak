@@ -673,3 +673,22 @@ label:has(.suffix) input{padding-right:42px}
 .quick-pick-detail .fund-col li{white-space:normal}
 .quick-pick-detail .fund-col li b{white-space:nowrap}
 .qp-after-row b{white-space:normal;line-height:1.45}
+
+/* 주택형 가격 팝업 */
+.qs-type-btn{border:0;background:transparent;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;cursor:pointer;color:inherit}
+.qs-type-btn b{font-size:12px;color:var(--green);text-decoration:underline dotted;text-underline-offset:3px}
+.qs-type-btn small{font-size:8px;color:var(--muted);font-weight:800}
+.price-dialog{border:0;border-radius:16px;padding:0;max-width:min(560px,94vw);width:94vw;box-shadow:0 24px 60px rgba(0,0,0,.28)}
+.price-dialog::backdrop{background:rgba(10,20,14,.55)}
+.price-dialog[open]{padding:16px 18px 18px}
+.pd-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.pd-head b{font-size:15px}
+.pd-head .ghost{padding:7px 12px}
+.pd-summary{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}
+.pd-summary span{font-size:11px;background:#f4f7ef;border:1px solid #dbe6cf;border-radius:99px;padding:5px 10px;color:#39463c;font-weight:800}
+.pd-summary b{color:var(--green)}
+.pd-table{width:100%;border-collapse:collapse}
+.pd-table th{font-size:10px;padding:7px 8px;background:#f1f4f1}
+.pd-table td{font-size:12px;padding:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pd-table td b{font-size:14px;color:var(--ink)}
+.pd-table td small{display:block;font-size:9px;color:var(--muted);font-weight:700}

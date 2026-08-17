@@ -86,7 +86,7 @@
   function normalizeNoticeFinance(target){
     if(!Array.isArray(target.pricing)||!target.pricing.length)target.pricing=(target.sizes||[]).map(row=>({size:row.name,min:0,max:0,options:[]}));
     if(!Array.isArray(target.payments))target.payments=[];
-    target.pricing=target.pricing.map(row=>({...row,options:Array.isArray(row.options)?row.options.map(value=>num(value)).filter(Boolean):[],details:Array.isArray(row.details)?row.details.map(detail=>({price:num(detail.price),paymentAmounts:Array.isArray(detail.paymentAmounts)?detail.paymentAmounts.map(value=>num(value)).filter(Boolean):[]})).filter(detail=>detail.price):[]}));
+    target.pricing=target.pricing.map(row=>({...row,options:Array.isArray(row.options)?row.options.map(value=>num(value)).filter(Boolean):[],details:Array.isArray(row.details)?row.details.map(detail=>({price:num(detail.price),paymentAmounts:Array.isArray(detail.paymentAmounts)?detail.paymentAmounts.map(value=>num(value)).filter(Boolean):[],floors:Array.isArray(detail.floors)?detail.floors.map(String):[],units:num(detail.units)})).filter(detail=>detail.price):[]}));
     target.options=Array.isArray(target.options)?target.options.map((row,index)=>({id:String(row.id||`option-${index}`),size:String(row.size||""),category:String(row.category||"paid"),name:String(row.name||"유상옵션"),price:num(row.price),paymentAmounts:Array.isArray(row.paymentAmounts)?row.paymentAmounts.map(value=>num(value)).filter(Boolean):[]})).filter(row=>row.size&&row.price):[];
     target.payments=target.payments.map((row,index)=>({...row,slot:Number.isInteger(Number(row.slot))?Number(row.slot):index}));
     if(!Array.isArray(target.interimLoanModes))target.interimLoanModes=target.payments.filter(row=>row.kind==="interim").map(()=>"review");
@@ -982,6 +982,24 @@
     el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
     renderQuickSupplyTable();
   }
+  function showPriceDialog(sizeName){
+    normalizeNoticeFinance(notice);
+    const size=(notice.sizes||[]).find(row=>row.name===sizeName);
+    const price=(notice.pricing||[]).find(row=>row.size===sizeName);
+    const eok=value=>value?`${(value/1e8).toFixed(2).replace(/\.?0+$/,"")}억`:"-";
+    let body;
+    if(!price||!num(price.max))body=`<p class="muted">이 주택형의 분양가 정보가 없습니다. 공고문 PDF를 업로드하면 층별 가격이 채워집니다.</p>`;
+    else{
+      const details=(price.details||[]).filter(d=>d.price).sort((a,b)=>a.price-b.price);
+      const rows=details.length?details.map(d=>`<tr><td>${d.floors&&d.floors.length?esc(d.floors.join(", ")):"층 정보 없음"}</td><td class="num-cell">${d.units?d.units+"세대":"-"}</td><td class="num-cell"><b>${eok(d.price)}</b><small>${formatWon(d.price)}</small></td></tr>`).join(""):`<tr><td colspan="3" class="muted">층별 내역 없음 · 최저 ${eok(price.min)} ~ 최고 ${eok(price.max)}${price.min?"":" (청약홈 API는 최고가만 제공 — PDF 업로드 시 층별 표시)"}</td></tr>`;
+      const rateRow=(notice.payments||[]).filter(r=>r.kind!=="other").map(r=>`${r.label} ${Math.round(num(r.rate)*10)/10}%`).join(" · ");
+      body=`<div class="pd-summary"><span>최저 <b>${eok(price.min||price.max)}</b></span><span>최고 <b>${eok(price.max)}</b></span>${size?`<span>전용 <b>${num(size.area).toFixed(2)}㎡</b></span><span>총 <b>${num(size.total)}세대</b></span>`:""}</div><div class="table-wrap"><table class="pd-table"><thead><tr><th>층·호</th><th>세대</th><th>분양가</th></tr></thead><tbody>${rows}</tbody></table></div>${rateRow?`<p class="hint">납부 ${esc(rateRow)}</p>`:""}`;
+    }
+    let dialog=$("priceDialog");
+    if(!dialog){dialog=document.createElement("dialog");dialog.id="priceDialog";dialog.className="price-dialog";document.body.appendChild(dialog);dialog.addEventListener("click",event=>{if(event.target===dialog||event.target.closest("[data-close]"))dialog.close()})}
+    dialog.innerHTML=`<div class="pd-head"><b>${esc(sizeName)} 주택형 · 층별 분양가</b><button type="button" class="ghost" data-close>닫기</button></div>${body}`;
+    if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");
+  }
   function renderQuickSupplyTable(){
     const el=$("quickSupplyTable");
     if(!el)return;
@@ -998,7 +1016,7 @@
       const special=num(size.total)-num(size.general);
       totals.agency+=num(size.agency);totals.multi+=num(size.multi);totals.newly+=num(size.newly);totals.elder+=num(size.elder);totals.first+=num(size.first);totals.baby+=num(size.baby);
       totals.special+=special;totals.point+=alloc.point;totals.lottery+=alloc.lottery;totals.total+=num(size.total);
-      return `<tr><td><b>${esc(size.name)}</b></td><td>${num(size.agency)||"-"}</td><td>${num(size.multi)||"-"}</td><td>${stageCell(size.newly)}</td><td>${num(size.elder)||"-"}</td><td>${stageCell(size.first)}</td><td>${stageCell(size.baby)}</td><td class="qs-sum">${special||"-"}</td><td>${alloc.point||"-"}</td><td>${alloc.lottery||"-"}</td><td class="qs-sum">${num(size.total)}</td></tr>`;
+      return `<tr><td><button type="button" class="qs-type-btn" data-price-size="${esc(size.name)}"><b>${esc(size.name)}</b><small>가격 ▸</small></button></td><td>${num(size.agency)||"-"}</td><td>${num(size.multi)||"-"}</td><td>${stageCell(size.newly)}</td><td>${num(size.elder)||"-"}</td><td>${stageCell(size.first)}</td><td>${stageCell(size.baby)}</td><td class="qs-sum">${special||"-"}</td><td>${alloc.point||"-"}</td><td>${alloc.lottery||"-"}</td><td class="qs-sum">${num(size.total)}</td></tr>`;
     }).join("");
     el.innerHTML=`<table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table><p class="hint qs-hint">신혼·생애최초·신생아 칸의 작은 숫자는 소득단계 배분(우선 50%·일반 20%·추첨)이며, 미달 시 다음 단계로 이월됩니다. 가점·추첨은 일반공급 물량을 이 공고의 가점비율로 나눈 값입니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
   }
@@ -1781,6 +1799,7 @@
   ["quickNoHome","quickNeverHome","quickHead"].forEach(id=>$(id)?.addEventListener("change",quickLiveSync));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",quickLiveSync));
   $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickResult()});
+  $("quickSupplyTable").addEventListener("click",event=>{const button=event.target.closest("[data-price-size]");if(button)showPriceDialog(button.dataset.priceSize)});
   $("quickResult").addEventListener("click",event=>{
     const button=event.target.closest("[data-quick-go]");
     if(button){setUiMode(false,button.dataset.quickGo);return}
