@@ -1321,7 +1321,17 @@
         cmpet=remndr||[];
       }
       const generalPending=!cmpet.length&&spsply.length>0;
-      if(!cmpet.length&&!spsply.length){target.innerHTML="<p class='muted'>이 관리번호의 접수 결과가 없습니다. 접수 전이거나 번호가 다를 수 있습니다(공고문 공급대상 표의 주택관리번호 확인). 접수 전 단지라면 단지명 검색으로 같은 지역 최근 단지를 참고하세요.</p>";document.querySelector(".applyhome-panel").open=true;return false}
+      // 일반 결과가 비었으면 공고 상세에서 접수 일정을 가져와 "왜 아직 없는지" 알려준다
+      let pendingHint="";
+      if(!cmpet.length){
+        const detail=await applyhomeGet(`${APPLYHOME_DETAIL_BASE}/getAPTLttotPblancDetail?page=1&perPage=1&serviceKey=${encodeURIComponent(key)}${cond}`).then(data=>(data.data||[])[0]||null).catch(()=>null);
+        const genEnd=detail?String(detail.GNRL_RNK2_ETC_AREA_ENDDE||detail.GNRL_RNK1_ETC_AREA_ENDDE||detail.RCEPT_ENDDE||""):"";
+        const today=new Date().toISOString().slice(0,10);
+        const homeUrl=detail?`https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetailView.do?houseManageNo=${esc(house)}&pblancNo=${esc(house)}`:"";
+        const timing=genEnd?(genEnd>=today?`일반 접수가 <b>${esc(genEnd.slice(5).replace("-","."))}</b>까지 진행 중이라 아직 결과가 없습니다. 공공데이터 API에는 <b>접수 전체 마감 다음 날</b> 반영됩니다.`:`접수는 끝났지만 공공데이터 API 반영은 하루 정도 늦습니다. 내일 다시 불러오세요.`):"";
+        pendingHint=`${timing}${homeUrl?` 실시간 경쟁률은 <a href="${homeUrl}" target="_blank" rel="noopener">청약홈 공고 페이지</a>에서 바로 볼 수 있습니다.`:""}`;
+        if(!spsply.length){target.innerHTML=`<p class='muted'>${pendingHint||"이 관리번호의 접수 결과가 없습니다. 접수 전이거나 번호가 다를 수 있습니다(공고문 공급대상 표의 주택관리번호 확인). 접수 전 단지라면 단지명 검색으로 같은 지역 최근 단지를 참고하세요."}</p>`;document.querySelector(".applyhome-panel").open=true;return false}
+      }
       const byType=new Map();
       const entry=type=>{const clean=String(type).trim();if(!byType.has(clean))byType.set(clean,{type:clean,supply:0,requests:0,cutline:0,cutlineEtc:0,avg:0,special:null});return byType.get(clean)};
       cmpet.forEach(row=>{
@@ -1352,7 +1362,7 @@
       });
       applyhomeLastRates=[...byType.values()].map(item=>({...item,rate:item.supply?Math.round(item.requests/item.supply*10)/10:0,cutline:item.cutline||item.cutlineEtc}));
       applyhomeLastHouse=house;
-      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — 일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요.</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p>`;
+      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — ${pendingHint||"일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요."}</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p>`;
       if(options.autoApply&&applyhomeLastRates.length)applyhomeApplyRates();
       return true;
     }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)}</p>`;document.querySelector(".applyhome-panel").open=true;return false}
