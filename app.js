@@ -1333,11 +1333,13 @@
         if(!spsply.length){target.innerHTML=`<p class='muted'>${pendingHint||"이 관리번호의 접수 결과가 없습니다. 접수 전이거나 번호가 다를 수 있습니다(공고문 공급대상 표의 주택관리번호 확인). 접수 전 단지라면 단지명 검색으로 같은 지역 최근 단지를 참고하세요."}</p>`;document.querySelector(".applyhome-panel").open=true;return false}
       }
       const byType=new Map();
-      const entry=type=>{const clean=String(type).trim();if(!byType.has(clean))byType.set(clean,{type:clean,supply:0,requests:0,cutline:0,cutlineEtc:0,avg:0,special:null});return byType.get(clean)};
+      const entry=type=>{const clean=String(type).trim();if(!byType.has(clean))byType.set(clean,{type:clean,supply:0,requests:0,requestsLocal:0,requestsEtc:0,cutline:0,cutlineEtc:0,avg:0,special:null,specialDetail:{}});return byType.get(clean)};
       cmpet.forEach(row=>{
         const item=entry(applyhomeVal(row,"HOUSE_TY"));
         item.supply=Math.max(item.supply,num(applyhomeVal(row,"SUPLY_HSHLDCO")));
-        item.requests+=num(applyhomeVal(row,"REQ_CNT"));
+        const req=num(applyhomeVal(row,"REQ_CNT"));
+        item.requests+=req;
+        if(/해당/.test(String(applyhomeVal(row,"RESIDE_SENM"))))item.requestsLocal+=req;else item.requestsEtc+=req;
       });
       (score||[]).forEach(row=>{
         const item=entry(applyhomeVal(row,"HOUSE_TY"));
@@ -1355,14 +1357,18 @@
           const supplyKey=code==="OPS"?"OLD_PARNTS_SUPORT_HSHLDCO":`${code}_HSHLDCO`;
           const typeSupply=num(row[supplyKey]);
           requests+=count;
-          if(typeSupply>0||count>0)parts.push(`${label} ${typeSupply}세대 ${count}명${typeSupply?` (${(count/typeSupply).toFixed(1)}:1)`:""}`);
+          if(typeSupply>0||count>0){
+            parts.push(`${label} ${typeSupply}세대 ${count}명${typeSupply?` (${(count/typeSupply).toFixed(1)}:1)`:""}`);
+            item.specialDetail[label]={supply:typeSupply,local:num(row[`CRSPAREA_${code}_CNT`]),total:count};
+          }
         });
         requests+=num(row.INSTT_RECOMEND_DCSN_CNT)+num(row.INSTT_RECOMEND_PREPAR_CNT)+num(row.TRANSR_INSTT_ENFSN_CNT);
         item.special={supply,requests,rate:supply?Math.round(requests/supply*10)/10:0,parts};
       });
       applyhomeLastRates=[...byType.values()].map(item=>({...item,rate:item.supply?Math.round(item.requests/item.supply*10)/10:0,cutline:item.cutline||item.cutlineEtc}));
       applyhomeLastHouse=house;
-      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — ${pendingHint||"일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요."}</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p>`;
+      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — ${pendingHint||"일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요."}</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p><div id="probLab"></div>`;
+      renderProbLab();
       if(options.autoApply&&applyhomeLastRates.length)applyhomeApplyRates();
       return true;
     }catch(error){target.innerHTML=`<p class='muted'>조회 실패: ${esc(error.message)}</p>`;document.querySelector(".applyhome-panel").open=true;return false}
@@ -1389,6 +1395,133 @@
     notice.expectationsSource=applied>0&&String(applyhomeLastHouse)===String(notice.houseManageNo||"")?"actual":"";
     renderExpectations();saveCurrentNotice(false);calculate();
     toast(applied?`${applied}개 주택형에 경쟁률·커트라인을 적용했습니다.`:"전용면적이 일치하는 주택형이 없어 자동 적용하지 못했습니다. 표를 보고 직접 입력해 주세요.");
+  }
+  // ===== 실제 접수결과 기반 부부 카드 조합 당첨확률 =====
+  const PROB_STATE_KEY="subscription_prob_cards_v3";
+  const PROB_CATS=[["general","일반공급"],["multi","다자녀 특공"],["newly1","신혼 특공 1단계(소득우선)"],["newly2","신혼 특공 2단계(일반)"],["newly3","신혼 특공 3단계(추첨)"],["first","생애최초 특공"],["baby","신생아 특공"],["elder","노부모 특공"]];
+  function loadProbState(){try{return JSON.parse(localStorage.getItem(PROB_STATE_KEY))||{}}catch(error){return{}}}
+  function saveProbState(state){localStorage.setItem(PROB_STATE_KEY,JSON.stringify(state))}
+  function probMatchSize(type){
+    const area=parseFloat(String(type).replace(/[^0-9.]/g,""));
+    if(!area)return null;
+    let best=null,bestDiff=0.06;
+    (notice.sizes||[]).forEach(size=>{const diff=Math.abs(area-num(size.area));if(diff<bestDiff){bestDiff=diff;best=size}});
+    return best;
+  }
+  function probShareForType(type,capWon){
+    if(!capWon)return null;
+    const size=probMatchSize(type);
+    const price=size?(notice.pricing||[]).find(row=>row.size===size.name):null;
+    if(!price)return {share:null,note:"현재 선택 공고에서 이 주택형의 분양가를 찾지 못해 상한 미반영(100% 가정)"};
+    const bands=(price.details||[]).filter(detail=>num(detail.price)&&num(detail.units)).map(detail=>({price:num(detail.price),units:num(detail.units)}));
+    const info=R.affordableShare(bands,capWon);
+    if(info.share!=null)return {...info,note:`상한 이내 ${info.affordableUnits}/${info.totalUnits}세대(${Math.round(info.share*1000)/10}%)${info.nearestOver?` · 최소 초과 동호수는 ${formatWonShort(info.nearestOver.gap)} 부족`:""}`};
+    if(num(price.max)&&num(price.max)<=capWon)return {share:1,note:"최고 분양가가 상한 이내 → 전 세대 계약 가능"};
+    if(num(price.min)&&num(price.min)>capWon)return {share:0,note:"최저 분양가부터 상한 초과 → 계약 가능 세대 없음"};
+    return {share:null,note:"층별 세대수 미파싱 — 상한 미반영(100% 가정). 공고문 PDF를 업로드하면 정확 계산"};
+  }
+  function probCardResult(card,capWon){
+    const item=applyhomeLastRates.find(row=>row.type===card.type);
+    if(!item)return null;
+    const sd=item.specialDetail||{};
+    const area=parseFloat(String(card.type).replace(/[^0-9.]/g,""))||0;
+    let res,detail="";
+    if(card.cat==="general"){
+      const ratio=R.pointRateForArea(area,notice.pointRates||{small:40,medium:70,large:80})/100;
+      res=R.actualGeneralProbability({supply:item.supply,applicantsLocal:item.requestsLocal,applicantsTotal:item.requests,scoreRatio:ratio});
+      detail=res.total?`일반 ${res.total}세대 = 가점 ${res.score} + 추첨 ${res.lottery} · 추첨풀 ${res.pool.toLocaleString("ko-KR")}명`:"";
+    }else if(card.cat==="multi"||card.cat==="elder"){
+      const d=sd[card.cat==="multi"?"다자녀":"노부모"]||{};
+      res=R.multiChildBenchmark({supply:d.supply,applicantsLocal:d.local,applicantsTotal:d.total});
+      detail=res.supply?`${res.supply}세대 · 경쟁풀 ${res.pool}명(해당지역 ${res.localApplicants}명)`:"";
+    }else if(/^newly/.test(card.cat)){
+      const d=sd["신혼"]||{};
+      res=R.actualNewlywedProbability({supply:d.supply,applicantsLocal:d.local,applicantsTotal:d.total,stage:+card.cat.slice(5)});
+      detail=res.total?`신혼 ${res.total}세대 = 1단계 ${res.stage1}·2단계 ${res.stage2}·3단계 ${res.stage3} · 경쟁풀 ${res.pool.toLocaleString("ko-KR")}명`:"";
+    }else{
+      const d=sd[card.cat==="first"?"생애최초":"신생아"]||{};
+      res=R.actualLotteryProbability({supply:d.supply,applicantsLocal:d.local,applicantsTotal:d.total});
+      detail=res.supply?`${res.supply}세대 · 추첨풀 ${res.pool.toLocaleString("ko-KR")}명`:"";
+    }
+    return {card,res,detail,share:probShareForType(card.type,capWon)};
+  }
+  const probPct=p=>p==null?"-":`${(p*100).toFixed(p*100>=10?1:2)}%`;
+  function renderProbLab(){
+    const lab=$("probLab");if(!lab)return;
+    const state=loadProbState();
+    if(!Array.isArray(state.cards)||!state.cards.length)state.cards=[{person:"A",cat:"general",type:applyhomeLastRates[0]?.type||""}];
+    const types=applyhomeLastRates.map(item=>item.type);
+    state.cards.forEach(card=>{if(!types.includes(card.type))card.type=types[0]||""});
+    saveProbState(state);
+    lab.innerHTML=`<details class="prob-panel"${state.open?" open":""}><summary>🎯 우리 부부 카드 조합 · 실질 당첨확률</summary>
+      <p class="hint">표면 경쟁률이 아니라 <b>실제 배정물량(가점/추첨 분리, 특공 단계별)과 지역우선</b>으로 계산합니다. 자금상한을 넣으면 층별 가격분포로 '계약 가능한 당첨확률'을 따로 보여줍니다.</p>
+      <div class="prob-cap"><label>자금상한(분양가 기준) <input id="probCap" type="number" step="0.1" min="0" inputmode="decimal" value="${esc(state.cap||"")}"> 억원 <span class="muted">비우면 상한 미반영</span></label></div>
+      <div id="probCards">${state.cards.map((card,i)=>`<div class="prob-row" data-i="${i}">
+        <select data-pf="person">${[["A","본인 A"],["B","배우자 B"]].map(([value,label])=>`<option value="${value}"${card.person===value?" selected":""}>${label}</option>`).join("")}</select>
+        <select data-pf="cat">${PROB_CATS.map(([value,label])=>`<option value="${value}"${card.cat===value?" selected":""}>${label}</option>`).join("")}</select>
+        <select data-pf="type">${types.map(type=>`<option value="${esc(type)}"${card.type===type?" selected":""}>${esc(type)}</option>`).join("")}</select>
+        <button type="button" class="ghost" data-pdel="${i}">✕</button></div>`).join("")}</div>
+      <div class="prob-actions"><button type="button" class="ghost" id="probAdd">＋ 카드 추가</button><button type="button" id="probRun">당첨확률 계산</button></div>
+      <div id="probOut"></div></details>`;
+    lab.onclick=event=>{
+      const current=loadProbState();
+      if(event.target.id==="probAdd"){current.cards.push({person:current.cards.some(card=>card.person==="A")?"B":"A",cat:"general",type:types[0]||""});current.open=true;saveProbState(current);renderProbLab();return}
+      const del=event.target.closest("[data-pdel]");
+      if(del){current.cards.splice(+del.dataset.pdel,1);current.open=true;saveProbState(current);renderProbLab();return}
+      if(event.target.id==="probRun"){current.open=true;saveProbState(current);computeProbLab()}
+    };
+    lab.onchange=event=>{
+      const current=loadProbState();
+      if(event.target.id==="probCap"){current.cap=event.target.value;current.open=true;saveProbState(current);return}
+      const field=event.target.dataset.pf,row=event.target.closest("[data-i]");
+      if(field&&row&&current.cards[+row.dataset.i]){current.cards[+row.dataset.i][field]=event.target.value;current.open=true;saveProbState(current)}
+    };
+  }
+  function computeProbLab(){
+    const state=loadProbState();
+    const capWon=num($("probCap")?.value)*1e8;
+    const results=(state.cards||[]).map(card=>probCardResult(card,capWon)).filter(Boolean);
+    const out=$("probOut");
+    if(!results.length){out.innerHTML="<p class='muted'>카드가 없습니다. 카드를 추가한 뒤 계산하세요.</p>";return}
+    const CONF={EXACT:["정확","ok"],ESTIMATE:["추정","est"],RANGE:["범위","est"],BENCHMARK_ONLY:["무작위 가정 참고치 · 실제 확률 아님","bench"],NOT_CALCULABLE:["계산 불가","bad"]};
+    const personLabel=value=>value==="B"?"배우자 B":"본인 A";
+    const catLabel=value=>(PROB_CATS.find(([key])=>key===value)||["","?"])[1];
+    const cardHtml=results.map(({card,res,detail,share})=>{
+      const [confText,confCls]=CONF[res.confidence]||["",""];
+      let main;
+      if(res.confidence==="BENCHMARK_ONLY")main=`무작위 가정 참고치 <b>${probPct(res.benchmark)}</b> · 정성평가 <b>${esc(res.qualitativeLabel)}</b> — 배점순 선발이라 점수분포 없이 실제 확률 계산 불가`;
+      else if(res.probability==null)main="접수 데이터가 없어 계산할 수 없습니다";
+      else main=`법적 당첨확률 <b>${probPct(res.probability)}</b>`;
+      const shareText=share?(share.share!=null&&res.probability!=null&&res.confidence!=="BENCHMARK_ONLY"?`계약 가능한 당첨확률 <b>${probPct(res.probability*share.share)}</b> — ${esc(share.note)}`:esc(share.note)):"";
+      return `<div class="prob-card"><div class="prob-card-head"><b>${personLabel(card.person)} · ${esc(catLabel(card.cat))} · ${esc(card.type)}</b><span class="prob-badge ${confCls}">${confText}</span></div>
+        <div>${main}${detail?` <span class="muted">(${esc(detail)})</span>`:""}</div>
+        ${shareText?`<div>${shareText}</div>`:""}
+        ${(res.assumptions||[]).length||(res.warnings||[]).length?`<details class="prob-notes"><summary>가정·경고 보기</summary>${(res.assumptions||[]).map(a=>`<div>· ${esc(a)}</div>`).join("")}${(res.warnings||[]).map(w=>`<div class="warn">⚠ ${esc(w)}</div>`).join("")}</details>`:""}</div>`;
+    }).join("");
+    const persons={};
+    results.forEach(result=>{
+      if(result.res.probability==null)return;
+      const group=persons[result.card.person]||(persons[result.card.person]={special:[],general:[]});
+      (result.card.cat==="general"?group.general:group.special).push(result);
+    });
+    const shareOf=result=>result.share&&result.share.share!=null?result.share.share:1;
+    const personRows=Object.entries(persons).map(([person,group])=>{
+      const pSpecial=R.combineIndependent(group.special.map(result=>result.res.probability));
+      const pGeneral=R.combineIndependent(group.general.map(result=>result.res.probability));
+      return {person,
+        p:R.combineSamePerson(pSpecial,pGeneral),
+        pAff:R.combineSamePersonAffordable(pSpecial,group.special.length?shareOf(group.special[0]):1,pGeneral,group.general.length?shareOf(group.general[0]):1)};
+    });
+    const benchCards=results.filter(result=>result.res.confidence==="BENCHMARK_ONLY");
+    const family=R.combineIndependent(personRows.map(row=>row.p));
+    const familyAff=R.combineIndependent(personRows.map(row=>row.pAff));
+    out.innerHTML=`${cardHtml}
+      <div class="prob-family"><b>가족 합산 (추첨구조 카드만)</b>
+        ${personRows.map(row=>`<div>${personLabel(row.person)}: 당첨 <b>${probPct(row.p)}</b>${capWon?` · 상한 이내 계약 가능 <b>${probPct(row.pAff)}</b>`:""} <span class="muted">같은 단지 특공→일반 순차 합산(특공 당첨 시 일반 제외)</span></div>`).join("")}
+        <div class="prob-total">가족 중 1명 이상 당첨 <b>${probPct(family)}</b>${capWon?` · 상한 이내 계약 가능 <b>${probPct(familyAff)}</b>`:""} <span class="prob-badge est">추정</span></div>
+        ${benchCards.length?`<div class="muted">＋ 배점순 카드 ${benchCards.length}건(${benchCards.map(result=>catLabel(result.card.cat)).join(", ")})은 점수분포 미공개로 수치 합산에서 제외했습니다. 위 카드의 참고치·정성평가만 확인하세요.</div>`:""}
+        <div class="muted">서로 다른 카드의 경쟁자 풀이 겹칠 수 있어 독립근사 결과입니다. 부부 중복당첨 시 접수시각이 빠른 1건만 유효하지만 '1명 이상 당첨' 확률에는 영향이 없습니다. 접수건수에는 서류 부적격자가 포함될 수 있습니다.</div>
+      </div>`;
   }
   const APPLYHOME_DETAIL_BASE="https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1";
   const LIVE_CACHE_KEY="subscription_live_notices_v3";

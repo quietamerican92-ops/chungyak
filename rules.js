@@ -915,7 +915,102 @@
     return result;
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  // ===== 실제 접수결과 기반 실질 당첨확률 (2026-08-20 명세) =====
+  // 표면 경쟁률(신청/공급)이 아니라, 신청자의 공급단계에 실제 배정되는 세대수만 분자로 쓴다.
+  function ceilClamped(total,ratio,already=0){
+    total=integer(total);
+    const raw=Math.ceil(total*(Number(ratio)||0));
+    return Math.max(0,Math.min(raw,total-integer(already)));
+  }
+  function allocateGeneralActual(units,scoreRatio){
+    const total=integer(units);
+    const score=ceilClamped(total,scoreRatio);
+    return {total,score,lottery:total-score};
+  }
+  function allocateNewlywedActual(units){
+    const total=integer(units);
+    const stage1=ceilClamped(total,.5);
+    const stage2=ceilClamped(total,.2,stage1);
+    return {total,stage1,stage2,stage3:Math.max(0,total-stage1-stage2)};
+  }
+  // 해당지역에서 마감되면 기타지역 신청자는 당첨대상에서 제외 → 해당지역 풀만 사용
+  function effectivePool(input){
+    const supply=integer(input.supply);
+    const local=integer(input.applicantsLocal);
+    const totalApplicants=Math.max(local,integer(input.applicantsTotal));
+    const closed=input.closedInLocal!=null?!!input.closedInLocal:local>=supply&&supply>0;
+    return {pool:closed&&local>0?local:totalApplicants,closed:closed&&local>0,local,totalApplicants};
+  }
+  function actualGeneralProbability(input){
+    const supply=integer(input.supply);
+    const alloc=allocateGeneralActual(supply,input.scoreRatio);
+    const region=effectivePool({...input,supply});
+    const assumptions=["가점제 낙첨자는 추첨풀에 재포함","무주택·1주택 구성비 미공개 → 전원 무주택 가정(보수적 기준치)"];
+    const warnings=["접수건수에는 서류검증 부적격자가 포함될 수 있음"];
+    if(region.closed)assumptions.push("해당지역 마감 → 해당지역 신청자만 경쟁풀");
+    else if(region.totalApplicants>region.local)warnings.push("해당지역 미마감 → 기타지역 포함 풀로 계산");
+    if(!supply||region.pool<=0)return {...alloc,pool:0,probability:null,confidence:"NOT_CALCULABLE",assumptions,warnings:["공급세대 또는 신청자 수가 없어 계산 불가"]};
+    if(!alloc.lottery)return {...alloc,pool:region.pool,probability:0,confidence:"EXACT",assumptions,warnings:[...warnings,"추첨 물량 0세대 — 가점 커트라인 미달 시 당첨기회 없음"]};
+    const lotteryPool=Math.max(1,region.pool-alloc.score);
+    return {...alloc,pool:lotteryPool,probability:clamp01(alloc.lottery/lotteryPool),confidence:"ESTIMATE",assumptions,warnings};
+  }
+  function actualNewlywedProbability(input){
+    const supply=integer(input.supply);
+    const alloc=allocateNewlywedActual(supply);
+    const stage=clamp(input.stage||3,1,3);
+    const region=effectivePool({...input,supply});
+    const assumptions=["공개 접수자 전원 서류적격 가정"];
+    const warnings=["단계별(소득구간) 신청자 수 미공개 → 추정치"];
+    if(!supply||region.pool<=0)return {...alloc,stage,pool:0,probability:null,confidence:"NOT_CALCULABLE",assumptions,warnings:["공급세대 또는 신청자 수가 없어 계산 불가"]};
+    if(stage===3){
+      if(!alloc.stage3)return {...alloc,stage,pool:region.pool,probability:0,confidence:"ESTIMATE",assumptions:[...assumptions,"1·2단계가 배정물량 이상으로 충원된다고 가정"],warnings:[...warnings,"3단계 배정물량 0세대 — 1·2단계 미달 시에만 기회"]};
+      const remaining=Math.max(1,region.pool-alloc.stage1-alloc.stage2);
+      return {...alloc,stage,pool:remaining,probability:clamp01(alloc.stage3/remaining),confidence:"ESTIMATE",assumptions:[...assumptions,"1·2단계가 해당지역 적격자로 모두 충원","1·2단계 낙첨자는 3단계 재경쟁"],warnings};
+    }
+    return {...alloc,stage,pool:region.pool,probability:clamp01(supply/region.pool),confidence:"ESTIMATE",assumptions:[...assumptions,`${stage}단계 신청자는 낙첨 시 이후 단계 재경쟁 → 전체 물량 기준 근사`],warnings};
+  }
+  function actualLotteryProbability(input){
+    const supply=integer(input.supply);
+    const region=effectivePool({...input,supply});
+    if(!supply||region.pool<=0)return {supply,pool:0,probability:null,confidence:"NOT_CALCULABLE",assumptions:[],warnings:["공급세대 또는 신청자 수가 없어 계산 불가"]};
+    return {supply,pool:region.pool,probability:clamp01(supply/region.pool),confidence:"ESTIMATE",assumptions:[region.closed?"해당지역 마감 → 해당지역 풀":"기타지역 포함 풀","추첨대상 전원 동일 자격 가정"],warnings:["지역·소득 우선 배정의 세부구조 미반영"]};
+  }
+  // 다자녀·노부모 등 배점순 선발: 경쟁자 점수분포 없이는 확률을 날조하지 않는다
+  function multiChildBenchmark(input){
+    const supply=integer(input.supply);
+    const region=effectivePool({...input,supply});
+    const benchmark=supply&&region.pool>0?clamp01(supply/region.pool):null;
+    const label=benchmark==null?"계산불가":benchmark>=.5?"유력":benchmark>=.25?"가능":benchmark>=.1?"경계":benchmark>=.03?"낮음":"매우낮음";
+    return {supply,pool:region.pool,localApplicants:region.local,benchmark,probability:null,confidence:"BENCHMARK_ONLY",qualitativeLabel:label,
+      warnings:["배점순 선발 — 경쟁자 점수분포 미공개로 정확한 확률 계산 불가","벤치마크는 무작위 추첨을 가정한 참고치이며 실제 당첨확률이 아님"]};
+  }
+  // 층·가격 분포 대비 자금상한: 상한 이내 세대 비율(동·호수 무작위 배정 가정)
+  function affordableShare(bands,capWon){
+    const list=(bands||[]).map(band=>({price:won(band.price),units:integer(band.units)})).filter(band=>band.price>0);
+    const totalUnits=list.reduce((sum,band)=>sum+band.units,0);
+    const cap=won(capWon);
+    if(!cap)return {share:null,affordableUnits:0,totalUnits,nearestOver:null};
+    if(!totalUnits)return {share:null,affordableUnits:0,totalUnits:0,nearestOver:null};
+    const affordableUnits=list.reduce((sum,band)=>sum+(band.price<=cap?band.units:0),0);
+    const over=list.filter(band=>band.price>cap).sort((a,b)=>a.price-b.price)[0]||null;
+    return {share:affordableUnits/totalUnits,affordableUnits,totalUnits,nearestOver:over?{price:over.price,gap:over.price-cap}:null};
+  }
+  // 같은 사람·같은 단지: 특공 당첨 시 일반 선정 제외 → 순차 조건부
+  function combineSamePerson(pSpecial,pGeneral){
+    const a=clamp01(pSpecial||0),b=clamp01(pGeneral||0);
+    return clamp01(a+(1-a)*b);
+  }
+  // 특공 당첨 후 감당 불가 동·호수를 받아도 일반으로 되돌아갈 수 없음 → 특공 당첨·감당불가는 실패 처리
+  function combineSamePersonAffordable(pSpecial,shareSpecial,pGeneral,shareGeneral){
+    const a=clamp01(pSpecial||0),b=clamp01(pGeneral||0);
+    const sa=shareSpecial==null?1:clamp01(shareSpecial),sb=shareGeneral==null?1:clamp01(shareGeneral);
+    return clamp01(a*sa+(1-a)*b*sb);
+  }
+  function combineIndependent(list){
+    return clamp01(1-(list||[]).reduce((product,p)=>product*(1-clamp01(p||0)),1));
+  }
+
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

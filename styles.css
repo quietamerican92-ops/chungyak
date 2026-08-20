@@ -692,3 +692,28 @@ label:has(.suffix) input{padding-right:42px}
 .pd-table td{font-size:12px;padding:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .pd-table td b{font-size:14px;color:var(--ink)}
 .pd-table td small{display:block;font-size:9px;color:var(--muted);font-weight:700}
+
+/* 실질 당첨확률 패널 */
+.prob-panel{margin-top:12px;border:1.5px solid #dbe6cf;border-radius:12px;padding:10px 12px;background:#fbfdf8}
+.prob-panel summary{cursor:pointer;font-weight:900;font-size:13px;color:var(--green)}
+.prob-cap{margin:10px 0 8px;font-size:12px;font-weight:800}
+.prob-cap input{width:90px;padding:7px 9px;border:1.5px solid #cdd9c0;border-radius:9px;font-size:13px;font-weight:800;text-align:right}
+.prob-row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center}
+.prob-row select{padding:7px 8px;border:1.5px solid #cdd9c0;border-radius:9px;font-size:12px;font-weight:700;background:#fff;max-width:46vw}
+.prob-row [data-pdel]{padding:6px 10px}
+.prob-actions{display:flex;gap:8px;margin:8px 0 10px}
+.prob-actions #probRun{background:var(--green);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-weight:900;font-size:13px;cursor:pointer}
+.prob-card{border:1px solid #e3ead8;border-radius:10px;padding:9px 11px;margin-bottom:7px;background:#fff;font-size:12px;line-height:1.55}
+.prob-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
+.prob-card b{color:var(--ink)}
+.prob-badge{font-size:10px;font-weight:900;border-radius:99px;padding:3px 8px;white-space:nowrap}
+.prob-badge.est{background:#fff5dc;color:#8a6d00;border:1px solid #ecd9a0}
+.prob-badge.ok{background:#e7f5e4;color:#1d6b2f;border:1px solid #bfe0b8}
+.prob-badge.bench{background:#f0ecfa;color:#5b3fa8;border:1px solid #d5c9f0}
+.prob-badge.bad{background:#fdeaea;color:#a33;border:1px solid #f0c4c4}
+.prob-notes{margin-top:5px;font-size:11px;color:#5a685c}
+.prob-notes summary{cursor:pointer;font-weight:800}
+.prob-notes .warn{color:#a05a00}
+.prob-family{border:1.5px solid var(--green);border-radius:10px;padding:10px 12px;background:#f3f8ee;font-size:12px;line-height:1.7}
+.prob-total{font-size:13px;margin-top:4px}
+.prob-total b{font-size:16px;color:var(--green)}

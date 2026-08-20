@@ -218,3 +218,43 @@ assert.strictEqual(monthlyInterestPlan.deferredInterest,0);
 assert.strictEqual(monthlyInterestPlan.ownCapitalAtMoveIn,304000000);
 assert.strictEqual(monthlyInterestPlan.netOwnCapitalAfterMonthlyInterest,monthlyInterestPlan.ownCapitalAtMoveIn-monthlyInterestPlan.totalInterimInterest);
 assert.strictEqual(monthlyInterestPlan.loanShortage,monthlyInterestPlan.mortgageRequired-monthlyInterestPlan.mortgageTarget);console.log("rules.test.js: allocation, scoring, income, profile, payment parsing and funding checks passed");
+
+// ===== 실제 접수결과 기반 실질 당첨확률 (2026-08-20 명세 §14) =====
+const near=(a,b)=>Math.abs(a-b)<1e-9;
+assert.deepStrictEqual(R.allocateGeneralActual(5,.40),{total:5,score:2,lottery:3});
+assert.deepStrictEqual(R.allocateGeneralActual(12,.40),{total:12,score:5,lottery:7});
+assert.deepStrictEqual(R.allocateGeneralActual(2,.70),{total:2,score:2,lottery:0});
+assert.deepStrictEqual(R.allocateNewlywedActual(1),{total:1,stage1:1,stage2:0,stage3:0});
+assert.deepStrictEqual(R.allocateNewlywedActual(2),{total:2,stage1:1,stage2:1,stage3:0});
+assert.deepStrictEqual(R.allocateNewlywedActual(5),{total:5,stage1:3,stage2:1,stage3:1});
+assert.deepStrictEqual(R.allocateNewlywedActual(9),{total:9,stage1:5,stage2:2,stage3:2});
+
+// 써밋 클라비온 테스트 케이스 (§11)
+const gen59A=R.actualGeneralProbability({supply:5,applicantsLocal:370,applicantsTotal:370,closedInLocal:true,scoreRatio:.40});
+assert.strictEqual(gen59A.score,2);assert.strictEqual(gen59A.lottery,3);assert.strictEqual(gen59A.pool,368);
+assert.ok(near(gen59A.probability,3/368));assert.strictEqual(gen59A.confidence,"ESTIMATE");
+const gen59B=R.actualGeneralProbability({supply:12,applicantsLocal:479,applicantsTotal:479,closedInLocal:true,scoreRatio:.40});
+assert.strictEqual(gen59B.lottery,7);assert.ok(near(gen59B.probability,7/474));
+const nw59B=R.actualNewlywedProbability({supply:5,applicantsLocal:142,applicantsTotal:173,closedInLocal:true,stage:3});
+assert.strictEqual(nw59B.stage3,1);assert.strictEqual(nw59B.pool,138);
+assert.ok(near(nw59B.probability,1/138));assert.strictEqual(nw59B.confidence,"ESTIMATE");
+// 추첨 물량 0: 저가점자 기회 없음
+assert.strictEqual(R.actualGeneralProbability({supply:2,applicantsLocal:100,scoreRatio:.70}).probability,0);
+// 다자녀: 점수분포 없으면 확률 날조 금지
+const mc=R.multiChildBenchmark({supply:2,applicantsLocal:23,applicantsTotal:37,closedInLocal:true});
+assert.strictEqual(mc.probability,null);assert.strictEqual(mc.confidence,"BENCHMARK_ONLY");
+assert.ok(near(mc.benchmark,2/23));
+const mcOpen=R.multiChildBenchmark({supply:2,applicantsLocal:23,applicantsTotal:37,closedInLocal:false});
+assert.ok(near(mcOpen.benchmark,2/37));
+// 자금상한 (§11-6~7)
+const bands59B=[{price:1693100000,units:4},{price:1730200000,units:5},{price:1782200000,units:4},{price:1837900000,units:19}];
+const share59B=R.affordableShare(bands59B,1750000000);
+assert.strictEqual(share59B.affordableUnits,9);assert.strictEqual(share59B.totalUnits,32);
+assert.ok(near(share59B.share,9/32));assert.strictEqual(share59B.nearestOver.price,1782200000);
+assert.ok(near((7/474)*(9/32),0.004153481012658228));
+// 순차·독립 합산 (§9, §13)
+assert.ok(near(R.combineSamePerson(1/138,3/368),(1/138)+(1-1/138)*(3/368)));
+assert.ok(near(R.combineSamePersonAffordable(1/138,9/32,3/368,1),(1/138)*(9/32)+(1-1/138)*(3/368)));
+const pClavion=R.combineSamePerson(1/138,3/368);
+assert.ok(near(R.combineIndependent([pClavion,3/1912]),1-(1-pClavion)*(1-3/1912)));
+console.log("rules.test.js: actual-result probability functions passed");
