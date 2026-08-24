@@ -1511,17 +1511,18 @@
     const types=applyhomeLastRates.map(item=>item.type);
     state.cards.forEach(card=>{if(!types.includes(card.type))card.type=types[0]||""});
     saveProbState(state);
-    lab.innerHTML=`<details class="prob-panel" open><summary>카드 조합 조정</summary>
-      <p class="hint">표면 경쟁률이 아니라 <b>실제 배정물량(가점/추첨 분리, 특공 단계별)과 지역우선</b>으로 계산합니다. 자금상한을 넣으면 층별 가격분포로 '계약 가능한 당첨확률'을 따로 보여줍니다.</p>
+    lab.innerHTML=`<section class="prob-panel"><div class="prob-panel-head"><div><b>신청 카드 구성</b><small>가족이 실제로 넣을 신청만 남겨두세요.</small></div><span>${state.cards.length}장</span></div>
+      <p class="hint prob-panel-copy">실제 배정물량과 지역우선으로 계산합니다. 다자녀·노부모만 사용자 시나리오를 선택적으로 입력할 수 있습니다.</p>
       <div class="prob-cap"><label>자금상한(분양가 기준) <input id="probCap" type="number" step="0.1" min="0" inputmode="decimal" value="${esc(state.cap||"")}"> 억원 <span class="muted">비우면 상한 미반영</span></label></div>
-      <div id="probCards">${state.cards.map((card,i)=>`<div class="prob-row" data-i="${i}">
-        <select data-pf="person">${[["A","본인 A"],["B","배우자 B"]].map(([value,label])=>`<option value="${value}"${card.person===value?" selected":""}>${label}</option>`).join("")}</select>
-        <select data-pf="cat">${PROB_CATS.map(([value,label])=>`<option value="${value}"${card.cat===value?" selected":""}>${label}</option>`).join("")}</select>
-        <select data-pf="type">${types.map(type=>`<option value="${esc(type)}"${card.type===type?" selected":""}>${esc(type)}</option>`).join("")}</select>
-        <input data-pf="manual" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="수동%" value="${esc(card.manual||"")}" title="다자녀·노부모(배점제) 카드의 예상 당첨확률(%)을 직접 넣으면 가족 합산에 반영됩니다">
-        <button type="button" class="ghost" data-pdel="${i}">✕</button></div>`).join("")}</div>
+      <div id="probCards" class="prob-card-editor">${state.cards.map((card,i)=>`<article class="prob-row" data-i="${i}" data-cat="${esc(card.cat)}">
+        <div class="prob-row-head"><span>신청 ${i+1}</span><button type="button" class="prob-delete" data-pdel="${i}" aria-label="신청 ${i+1} 삭제" title="삭제">×</button></div>
+        <label class="prob-field prob-person"><small>신청자</small><select data-pf="person">${[["A","본인 A"],["B","배우자 B"]].map(([value,label])=>`<option value="${value}"${card.person===value?" selected":""}>${label}</option>`).join("")}</select></label>
+        <label class="prob-field prob-category"><small>공급유형</small><select data-pf="cat">${PROB_CATS.map(([value,label])=>`<option value="${value}"${card.cat===value?" selected":""}>${label}</option>`).join("")}</select></label>
+        <label class="prob-field prob-type"><small>주택형</small><select data-pf="type">${types.map(type=>`<option value="${esc(type)}"${card.type===type?" selected":""}>${esc(type)}</option>`).join("")}</select></label>
+        ${card.cat==="multi"||card.cat==="elder"?`<label class="prob-field prob-manual"><small>사용자 시나리오 <em>선택</em></small><span><input data-pf="manual" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="예: 5" value="${esc(card.manual||"")}"><b>%</b></span></label>`:`<div class="prob-auto"><small>계산 방식</small><b>실제 접수값 자동 계산</b></div>`}
+      </article>`).join("")}</div>
       <div class="prob-actions"><button type="button" class="ghost" id="probAdd">＋ 카드 추가</button><button type="button" id="probRun">당첨확률 계산</button></div>
-      <div id="probOut"></div></details>`;
+      <div id="probOut"></div></section>`;
     lab.onclick=event=>{
       const current=loadProbState();
       if(event.target.id==="probAdd"){current.cards.push({person:current.cards.some(card=>card.person==="A")?"B":"A",cat:"general",type:types[0]||""});current.open=true;saveProbState(current);renderProbLab();return}
@@ -1533,7 +1534,7 @@
       const current=loadProbState();
       if(event.target.id==="probCap"){current.cap=event.target.value;current.open=true;saveProbState(current);return}
       const field=event.target.dataset.pf,row=event.target.closest("[data-i]");
-      if(field&&row&&current.cards[+row.dataset.i]){current.cards[+row.dataset.i][field]=event.target.value;current.open=true;saveProbState(current)}
+      if(field&&row&&current.cards[+row.dataset.i]){current.cards[+row.dataset.i][field]=event.target.value;current.open=true;saveProbState(current);renderProbLab()}
     };
     computeProbLab();
   }
@@ -2035,9 +2036,9 @@
     queueFundingSave();renderFundingPlan();
   });
   $("liveBannerToggle").addEventListener("click",()=>{
-    const list=$("liveBannerList");
-    if(list.classList.contains("is-hidden")){renderLiveList();list.classList.remove("is-hidden");$("liveBannerToggle").textContent="▴"}
-    else{list.classList.add("is-hidden");$("liveBannerToggle").textContent="▾"}
+    const list=$("liveBannerList"),toggle=$("liveBannerToggle"),opening=list.classList.contains("is-hidden");
+    if(opening){renderLiveList();list.classList.remove("is-hidden")}else list.classList.add("is-hidden");
+    toggle.classList.toggle("is-open",opening);toggle.setAttribute("aria-expanded",String(opening));toggle.setAttribute("aria-label",opening?"전체 공고 목록 닫기":"전체 공고 목록 열기");
   });
   $("liveBannerMain").addEventListener("click",()=>{
     const house=$("liveBannerMain").dataset.house;
