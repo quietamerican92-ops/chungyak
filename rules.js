@@ -153,7 +153,7 @@
     const clean=(lines||[]).map(line=>normalizeSplitDecimals(line).replace(/\s+/g," ").trim());
     const start=clean.findIndex(line=>/공급대상/.test(line)&&!/일정/.test(line));
     if(start<0)return [];
-    const endOffset=clean.slice(start+1).findIndex(line=>/공급금액.*납부일정/.test(line));
+    const endOffset=clean.slice(start+1).findIndex(line=>/공급\s*금액.*납부\s*일정/.test(line));
     const seg=clean.slice(start,endOffset>=0?start+1+endOffset:start+60);
     const areaAt=[];
     seg.forEach((line,index)=>{
@@ -264,7 +264,10 @@
   }
 
   function paymentSection(lines,sizes){
-    const start=(lines||[]).findIndex(line=>/공급금액.*(?:납부일정|표)|분양금액.*(?:납부일정|표)|공급대상.*공급금액/.test(line));
+    // "공급금액"·"공급 금액" 모두 허용. 납부일정이 붙은 표 제목을 최우선으로 잡아 목차성 문구("공급 대상 및 공급 금액")에 앞서 매칭되는 것을 막는다
+    const patterns=[/공급\s*금액.*납부\s*일정|분양\s*금액.*납부\s*일정/,/공급\s*금액.*표|분양\s*금액.*표/,/공급\s*대상.*공급\s*금액/];
+    let start=-1;
+    for(const pattern of patterns){start=(lines||[]).findIndex(line=>pattern.test(line));if(start>=0)break}
     if(start<0)return null;
     const section=lines.slice(start,start+650);
     const entries=section.map((line,index)=>priceEntry(line,index)).filter(Boolean);
