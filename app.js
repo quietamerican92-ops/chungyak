@@ -74,6 +74,10 @@
   let notices=readStorage(NOTICES_KEY,{});
   if(!Object.keys(notices).length)notices[DEFAULT_NOTICE.id]=clone(DEFAULT_NOTICE);
   let activeId=localStorage.getItem(ACTIVE_KEY)||DEFAULT_NOTICE.id;
+  const noticeCleanup=dedupeNoticeCollection(notices,activeId);
+  notices=noticeCleanup.notices;activeId=noticeCleanup.activeId;
+  const removedDuplicateNotices=noticeCleanup.removed;
+  if(removedDuplicateNotices){localStorage.setItem(NOTICES_KEY,JSON.stringify(notices));localStorage.setItem(ACTIVE_KEY,activeId)}
   let notice=clone(notices[activeId]||DEFAULT_NOTICE);
   if(notice.id===DEFAULT_NOTICE.id&&!notice.houseManageNo)notice.houseManageNo=DEFAULT_NOTICE.houseManageNo;
   if(notice.id===DEFAULT_NOTICE.id&&!notice.announceDate)notice.announceDate=DEFAULT_NOTICE.announceDate;
@@ -82,6 +86,12 @@
 
   function readStorage(key,fallback){
     try{return JSON.parse(localStorage.getItem(key))||fallback}catch{return fallback}
+  }
+  function dedupeNoticeCollection(collection,currentId){
+    return NoticeDeduper.dedupe(collection,currentId,DEFAULT_NOTICE.id);
+  }
+  function existingNoticeId(candidate){
+    return NoticeDeduper.findDuplicateId(notices,candidate);
   }
   function normalizeNoticeFinance(target){
     if(!Array.isArray(target.pricing)||!target.pricing.length)target.pricing=(target.sizes||[]).map(row=>({size:row.name,min:0,max:0,options:[]}));
@@ -1930,8 +1940,9 @@
     if(!file)return;
     statusEl=statusEl||$("parseStatus");
     try{
-      const extracted=await extractPdf(file,statusEl);
-      notice=parseAnnouncement(extracted.lines,file.name);$("planPrice").value="";
+      const extracted=await extractPdf(file,statusEl),parsed=parseAnnouncement(extracted.lines,file.name),matchedId=existingNoticeId(parsed),previous=matchedId?notices[matchedId]:null;
+      notice=previous?{...clone(previous),...parsed,id:matchedId,houseManageNo:parsed.houseManageNo||previous.houseManageNo||"",announceDate:parsed.announceDate||previous.announceDate||"",expectations:clone(previous.expectations||{}),expectationsSource:previous.expectationsSource||""}:parsed;
+      $("planPrice").value="";
       renderNotice();
       const message=notice.sizes.length
         ?`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`
@@ -1943,7 +1954,7 @@
       calculate();
       applyModelPrediction(true);
       if(document.body.classList.contains("simple-mode")&&$("quickResult").innerHTML)renderQuickResult();
-      toast("PDF 분석 초안을 만들었습니다.");
+      toast(matchedId?"같은 공고의 기존 저장본을 새 PDF 분석 결과로 갱신했습니다.":"PDF 분석 초안을 만들었습니다.");
     }catch(error){
       console.error(error);
       const failure="PDF 자동 분석에 실패했습니다. 인터넷 연결을 확인하거나 상세 모드에서 숫자를 직접 입력해 주세요.";
@@ -1958,7 +1969,8 @@
     try{
       const parsed=JSON.parse(await file.text());
       if(!Array.isArray(parsed.sizes))throw new Error("sizes missing");
-      notice={...clone(DEFAULT_NOTICE),...parsed,id:parsed.id||"notice-"+Date.now(),verified:false};
+      const incoming={...clone(DEFAULT_NOTICE),...parsed,id:parsed.id||"notice-"+Date.now(),houseManageNo:parsed.houseManageNo||"",announceDate:parsed.announceDate||"",verified:false},matchedId=existingNoticeId(incoming),previous=matchedId?notices[matchedId]:null;
+      notice=previous?{...clone(previous),...incoming,id:matchedId,houseManageNo:incoming.houseManageNo||previous.houseManageNo||"",announceDate:incoming.announceDate||previous.announceDate||""}:incoming;
       $("planPrice").value="";renderNotice();renderFundingPlan();toast("JSON 공고를 불러왔습니다. 숫자를 검수해 주세요.");
     }catch{toast("올바른 공고 JSON 파일이 아닙니다.")}
   });
@@ -2093,5 +2105,6 @@ $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderF
 
   wrapSuffixInputs();setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderProbLab();renderFundingPlan();
   setUiMode((localStorage.getItem(UI_MODE_KEY)||"simple")==="simple");
+  if(removedDuplicateNotices)setTimeout(()=>toast(`중복 저장 공고 ${removedDuplicateNotices}건을 정리했습니다.`),250);
   loadLiveNotices();
 })();

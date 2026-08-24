@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "build": "node build-site.mjs",
-    "test": "node rules.test.js"
+    "test": "node rules.test.js && node notice-dedupe.test.js"
   }
 }
