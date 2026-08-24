@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260810-30">
+  <link rel="stylesheet" href="./styles.css?v=20260824-ux1">
 </head>
 <body>
   <header class="hero">
@@ -35,8 +35,8 @@
   <main class="shell">
     <section id="quick" class="panel">
       <div class="quick-head">
-        <div><span class="kicker">QUICK CHECK</span><h2>3분 간편 진단</h2><p>정보만 넣으면 <b>유형·평형</b>을 바로 추천.</p></div>
-        <button id="openAdvanced" class="ghost" type="button">상세 모드 →</button>
+        <div><span class="kicker">TODAY PLAN</span><h2>우리 가족 신청안</h2><p>저장된 프로필로 <b>신청 조합·당첨 가능성·자금</b>을 먼저 보여드립니다.</p></div>
+        <button id="openAdvanced" class="ghost" type="button">공고·계산 검수 →</button>
       </div>
 
       <article class="card quick-card quick-pdf-card">
@@ -51,22 +51,30 @@
         <div id="quickNoticeSummary" class="quick-notice-summary"></div>
       </article>
 
-      <article class="card quick-card">
-        <h3><span class="quick-step">2</span> 타입별·유형별 물량</h3>
-        <div id="quickSupplyTable" class="table-wrap"></div>
-      </article>
+      <div id="quickProfileSnapshot" class="quick-profile-snapshot"></div>
+      <div id="quickResult" class="quick-result-first"></div>
 
-      <article class="card quick-card">
-        <div class="quick-pdf-row">
-          <h3><span class="quick-step">＋</span> 인근 실거래 시세 <small class="qn-sub" id="marketAreaLabel"></small></h3>
-          <button id="loadMarket" class="ghost file-button-sm" type="button">최근 6개월 시세 조회</button>
-        </div>
-        <div id="marketResult" class="market-result"></div>
-        <input id="tradeApiKey" type="hidden" value="">
-      </article>
+      <details id="quickEvidenceFold" class="quick-section-fold">
+        <summary><span><b>공고 물량·분양가·인근 시세</b><small>추천 근거 원문을 확인할 때 펼치세요</small></span><i>펼치기</i></summary>
+        <article class="card quick-card">
+          <h3>타입별·유형별 물량</h3>
+          <div id="quickSupplyTable" class="table-wrap"></div>
+        </article>
 
+        <article class="card quick-card">
+          <div class="quick-pdf-row">
+            <h3>인근 실거래 시세 <small class="qn-sub" id="marketAreaLabel"></small></h3>
+            <button id="loadMarket" class="ghost file-button-sm" type="button">최근 6개월 시세 조회</button>
+          </div>
+          <div id="marketResult" class="market-result"></div>
+          <input id="tradeApiKey" type="hidden" value="">
+        </article>
+      </details>
+
+      <details id="quickInputsFold" class="quick-section-fold quick-inputs-fold" open>
+        <summary><span><b>가족·소득·자금 정보</b><small>저장된 값 확인 및 수정</small></span><i>수정하기</i></summary>
       <article class="card quick-card">
-        <h3><span class="quick-step">3</span> 나와 가족</h3>
+        <h3><span class="quick-step">2</span> 나와 가족</h3>
         <div class="quick-options">
           <label><input type="radio" name="quickFamily" value="single" checked><span><b>미혼·자녀 없음</b><small>1인 가구</small></span></label>
           <label><input type="radio" name="quickFamily" value="married"><span><b>법률혼 부부</b><small>혼인신고 완료</small></span></label>
@@ -93,7 +101,7 @@
       </article>
 
       <article class="card quick-card">
-        <h3><span class="quick-step">4</span> 소득과 자금</h3>
+        <h3><span class="quick-step">3</span> 소득과 자금</h3>
         <div class="form-grid quick-grid">
           <label>내 월소득(세전)<input id="quickIncomeA" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">특공 소득기준·DSR 계산용</small></label>
           <label id="quickIncomeBField" class="is-hidden">배우자 월소득(세전)<input id="quickIncomeB" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
@@ -103,7 +111,7 @@
           <label>잔금 때 팔 수 있는 주식·자산<input id="quickAsset" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">현재 평가액 (선택)</small></label>
         </div>
         <input id="quickCredit" type="hidden" value="0"><input id="quickCreditRate" type="hidden" value="6.5">
-        <details class="fold quick-loan-fold" open>
+        <details class="fold quick-loan-fold">
           <summary>부족하면 쓸 추가 대출 <span class="fold-info" id="quickCreditFoldInfo">없음</span></summary>
           <div class="fold-body">
             <div id="quickCreditList" class="credit-list"></div>
@@ -122,9 +130,9 @@
         <p class="hint">소득은 특공 소득단계와 DSR 대출한도 계산에, 현금·저축은 계약금·중도금 납부 가능성 판정에 쓰입니다.</p>
       </article>
 
-      <button id="quickCalculate" class="primary quick-cta" type="button">이 조건으로 추천 받기</button>
-      <div id="quickResult"></div>
-      <p class="hint quick-notice-hint">간편 진단은 예치금 충족·재당첨 제한 없음 등 일반적인 상황을 가정합니다. 세부 요건 조정과 공고 숫자 검수는 상세 모드에서 할 수 있습니다.</p>
+      <button id="quickCalculate" class="primary quick-cta" type="button">추천 조합 계산하기</button>
+      </details>
+      <p class="hint quick-notice-hint">기본 화면은 예치금 충족·재당첨 제한 없음 등 일반적인 상황을 가정합니다. 상세 자격과 공고 숫자는 공고·계산 검수에서 확인하세요.</p>
     </section>
 
     <nav class="steps" aria-label="계산 단계">
@@ -372,6 +380,7 @@
           <tbody id="expectationRows"></tbody>
         </table></div>
         <div id="modelNote" class="model-note"></div>
+        <section class="prob-home"><div class="prob-home-head"><div><span class="kicker">FAMILY ODDS</span><h4>가족 신청 조합 · 실질 당첨 가능성</h4><p>실제 접수값과 법정 배정구조를 반영하며, 배점제는 확률을 만들지 않습니다.</p></div><span id="probSourceState" class="data-source-badge pending">접수결과 필요</span></div><div id="probLab"></div></section>
         <details class="applyhome-panel">
           <summary>청약홈 실제 경쟁률 불러오기 (공공데이터포털 인증키 필요)</summary>
           <div class="applyhome-body">
@@ -419,7 +428,7 @@
       <details class="legal-note">
         <summary>계산 원칙과 꼭 확인할 점</summary>
         <div>
-          <p>이 계산기는 모집공고 물량을 법정 비율로 물량화하고 상대적인 전략 우선순위를 비교합니다. 경쟁률이나 실제 당첨확률을 예측하지 않습니다.</p>
+          <p>이 계산기는 모집공고 물량을 법정 비율로 물량화하고 상대적인 전략 우선순위를 비교합니다. 실제 접수결과가 있으면 가점·추첨, 특공 단계와 지역우선 구조를 반영한 가능성을 별도로 계산하며, 배점제는 지원자 점수분포가 없으면 확률을 표시하지 않습니다.</p>
           <p>특별공급 각 단계의 미달 물량과 낙첨자는 다음 단계로 넘어가므로 실제 접수결과에 따라 후속 단계 물량은 늘 수 있습니다. 최종 신청 전 청약Home과 사업주체에 자격을 확인하세요.</p>
         </div>
       </details>
@@ -569,9 +578,9 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260810-30"></script>
-  <script src="./model-data.js?v=20260810-30"></script>
-  <script src="./lawd-map.js?v=20260810-30"></script>
-  <script src="./app.js?v=20260810-30"></script>
+  <script src="./rules.js?v=20260824-ux1"></script>
+  <script src="./model-data.js?v=20260824-ux1"></script>
+  <script src="./lawd-map.js?v=20260824-ux1"></script>
+  <script src="./app.js?v=20260824-ux1"></script>
 </body>
 </html>

@@ -556,10 +556,17 @@
     return {special,general};
   }
   function chanceLabel(row){
-    if(row.winChance===null||row.winChance===undefined)return `전략지수 ${row.score.toFixed(1)}`;
+    if(row.type==="multi"||row.type==="elder")return "배점순 선발 · 실제 확률 계산 불가";
+    if(row.winChance===null||row.winChance===undefined)return `전략 비교값 ${row.score.toFixed(1)}`;
     if(row.winChance>=1)return "가점 당첨권";
-    const source=notice.expectationsSource==="actual"?"실제 경쟁률 기반":notice.expectationsSource==="model"?"과거데이터 추정":"추정";
+    const source=notice.expectationsSource==="actual"?"실제 접수값 기반":notice.expectationsSource==="model"?"과거데이터 예측":"참고값";
     return `${source} 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
+  }
+  function resultSourceMeta(row){
+    if(row?.type==="multi"||row?.type==="elder")return {label:"배점제 · 확률 미산출",cls:"score"};
+    if(notice.expectationsSource==="actual")return {label:"실제 접수값 기반",cls:"actual"};
+    if(notice.expectationsSource==="model")return {label:"과거데이터 예측",cls:"model"};
+    return {label:"전략 비교값",cls:"manual"};
   }
   function appLine(label,row){
     return `<div class="application"><div><small>${label}</small><br>${row?esc(R.TYPE_LABELS[row.type]):"미신청"}${row?`<span class="strategy-reason">근거 · ${esc(row.reasons.join(" · "))}</span>`:""}</div><b>${row?`${esc(row.size)}<br><small>${esc(row.seatText)} · ${esc(chanceLabel(row))}</small>`:"—"}</b></div>`;
@@ -586,23 +593,28 @@
   }
   function renderCandidates(rows){
     if(!rows.length){$("candidateTable").innerHTML="<p class='muted'>추천 후보가 없습니다.</p>";return;}
-    const cards=rows.slice(0,24).map((row,i)=>{
+    const card=(row,i)=>{
       const hasChance=row.winChance!==null&&row.winChance!==undefined;
       const win=hasChance&&row.winChance>=1;
-      const chance=hasChance?(win?"당첨권":(row.winChance*100).toFixed(row.winChance<.1?1:0)+"%"):row.score.toFixed(0);
-      const chanceLabel=hasChance?(win?"가점 당첨권":"당첨확률"):"전략지수";
+      const scoreBased=row.type==="multi"||row.type==="elder";
+      const chance=scoreBased?"—":hasChance?(win?"당첨권":(row.winChance*100).toFixed(row.winChance<.1?1:0)+"%"):row.score.toFixed(0);
+      const chanceTitle=scoreBased?"배점순 · 확률 미산출":hasChance?(win?"가점 당첨권":resultSourceMeta(row).label):"전략 비교값";
       const personCls=row.personKey==="b"?"pB":"pA";
       return `<div class="cand">
         <div class="cand-head">
           <span class="cand-rank">${i+1}</span>
           <div class="cand-id"><b>${esc(row.size)} · ${R.TYPE_LABELS[row.type]}</b><span class="cand-person ${personCls}">${esc(row.personLabel)}</span></div>
-          <div class="cand-chance ${win?"win":""}"><em>${esc(chance)}</em><small>${chanceLabel}</small></div>
+          <div class="cand-chance ${win?"win":""}"><em>${esc(chance)}</em><small>${chanceTitle}</small></div>
         </div>
         <p class="cand-reason">${esc(row.reasons.slice(1).join(" · "))}</p>
         <div class="cand-foot"><span class="cand-seat">실제 물량 <b>${esc(row.seatText)}</b></span><div class="bar"><i style="width:${row.score}%"></i></div></div>
       </div>`;
+    };
+    const groups=[["a","신청자 A"],["b","배우자 B"]].map(([key,label])=>({key,label,rows:rows.filter(row=>row.personKey===key)})).filter(group=>group.rows.length);
+    $("candidateTable").innerHTML=groups.map(group=>{
+      const visible=group.rows.slice(0,3),more=group.rows.slice(3,12);
+      return `<section class="cand-group"><div class="cand-group-head"><b>${group.label}</b><span>상위 ${Math.min(group.rows.length,3)}개 우선 표시</span></div><div class="cand-list">${visible.map((row,i)=>card(row,i)).join("")}</div>${more.length?`<details class="cand-more"><summary>나머지 후보 ${more.length}개 보기</summary><div class="cand-list">${more.map((row,i)=>card(row,i+3)).join("")}</div></details>`:""}</section>`;
     }).join("");
-    $("candidateTable").innerHTML=`<div class="cand-list">${cards}</div>`;
   }
   function renderEligibility(profile){
     const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
@@ -931,6 +943,21 @@
     renderQuickNoticeSummary();
     setupMoneyInputs($("quick"));
   }
+  function quickProfileState(){
+    const family=quickFamily(),married=family==="married",missing=[];
+    if(!R.normalizeDate($("quickBirth").value))missing.push("내 생년월일");
+    if(!R.normalizeDate($("quickAccount").value))missing.push("내 통장 가입일");
+    if(married&&!R.normalizeDate($("quickMarriage").value))missing.push("혼인신고일");
+    const labels={single:"미혼·자녀 없음",married:"법률상 부부",single_parent:"미혼·자녀 있음"};
+    return {family,married,missing,essentialComplete:missing.length===0,labels};
+  }
+  function renderQuickProfileSnapshot(){
+    const el=$("quickProfileSnapshot");if(!el)return;
+    const state=quickProfileState(),children=num($("quickChildren").value),fetuses=num($("quickFetuses").value);
+    const income=num($("quickIncomeA").value)+(state.married?num($("quickIncomeB").value):0),cash=num($("quickCash").value),saving=num($("quickSaving").value);
+    const chips=[state.labels[state.family]||"가구",`${children}자녀${fetuses?` + 태아 ${fetuses}`:""}`,$("quickRegion").value||"거주지 미입력",income?`월소득 ${formatWonShort(income)}`:"소득 미입력",cash?`현금 ${formatWonShort(cash)}`:"현금 미입력",saving?`월저축 ${formatWonShort(saving)}`:"월저축 미입력"];
+    el.innerHTML=`<div class="quick-profile-bar"><div><span class="saved-profile-badge">저장된 프로필</span><div class="quick-profile-chips">${chips.map((chip,i)=>`<span class="${i>2&&!/미입력/.test(chip)?"money":""}${/미입력/.test(chip)?" missing":""}">${esc(chip)}</span>`).join("")}</div>${state.missing.length?`<small class="quick-profile-missing">추천 계산 전 입력 필요 · ${esc(state.missing.join(" · "))}</small>`:"<small>입력값을 기준으로 아래 신청안을 자동 갱신합니다.</small>"}</div><div class="quick-profile-actions"><button type="button" class="ghost" data-edit-profile>프로필 수정</button>${state.essentialComplete?`<button type="button" class="primary" data-refresh-plan>다시 계산</button>`:""}</div></div>`;
+  }
   let lastChipNoticeId=null;
   function updateNoticeChip(){
     if($("currentNoticeChip"))$("currentNoticeChip").textContent="📌 "+(notice.projectName||"공고를 선택하세요")+(notice.remainder?" · 무순위":"");
@@ -1011,19 +1038,23 @@
       return `${count}<small class="qs-stage">${alloc.stage1}·${alloc.stage2}·${alloc.stage3}</small>`;
     };
     const totals={agency:0,multi:0,newly:0,elder:0,first:0,baby:0,special:0,point:0,lottery:0,total:0};
+    const mobile=[];
     const rows=notice.sizes.map(size=>{
       const alloc=R.generalAllocation(num(size.general),num(size.area),notice.pointRates);
       const special=num(size.total)-num(size.general);
+      const price=(notice.pricing||[]).find(row=>row.size===size.name);
       totals.agency+=num(size.agency);totals.multi+=num(size.multi);totals.newly+=num(size.newly);totals.elder+=num(size.elder);totals.first+=num(size.first);totals.baby+=num(size.baby);
       totals.special+=special;totals.point+=alloc.point;totals.lottery+=alloc.lottery;totals.total+=num(size.total);
+      const stages=value=>{const count=num(value);if(!count)return "-";const a=R.specialAllocation(count);return `${count}세대 <small>1·2·3단계 ${a.stage1}·${a.stage2}·${a.stage3}</small>`};
+      mobile.push(`<details class="qs-size-card"><summary><span><b>${esc(size.name)}</b><small>${price?.max?`최고 ${formatWonShort(price.max)}`:"가격 미확인"}</small></span><span><b>${num(size.total)}세대</b><small>특공 ${special} · 일반 ${num(size.general)}</small></span></summary><div class="qs-size-body"><button type="button" class="qs-mobile-price" data-price-size="${esc(size.name)}">층별 분양가 보기 →</button><div class="qs-mobile-grid"><span>기관추천 <b>${num(size.agency)||"-"}</b></span><span>다자녀 <b>${num(size.multi)||"-"}</b></span><span>신혼 <b>${stages(size.newly)}</b></span><span>노부모 <b>${num(size.elder)||"-"}</b></span><span>생애최초 <b>${stages(size.first)}</b></span><span>신생아 <b>${stages(size.baby)}</b></span><span class="qs-mobile-total">일반 가점 <b>${alloc.point||"-"}</b></span><span class="qs-mobile-total">일반 추첨 <b>${alloc.lottery||"-"}</b></span></div></div></details>`);
       return `<tr><td><button type="button" class="qs-type-btn" data-price-size="${esc(size.name)}"><b>${esc(size.name)}</b><small>가격 ▸</small></button></td><td>${num(size.agency)||"-"}</td><td>${num(size.multi)||"-"}</td><td>${stageCell(size.newly)}</td><td>${num(size.elder)||"-"}</td><td>${stageCell(size.first)}</td><td>${stageCell(size.baby)}</td><td class="qs-sum">${special||"-"}</td><td>${alloc.point||"-"}</td><td>${alloc.lottery||"-"}</td><td class="qs-sum">${num(size.total)}</td></tr>`;
     }).join("");
-    el.innerHTML=`<table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table><p class="hint qs-hint">신혼·생애최초·신생아 칸의 작은 숫자는 소득단계 배분(우선 50%·일반 20%·추첨)이며, 미달 시 다음 단계로 이월됩니다. 가점·추첨은 일반공급 물량을 이 공고의 가점비율로 나눈 값입니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
+    el.innerHTML=`<div class="qs-desktop-table"><table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table></div><div class="qs-mobile-cards">${mobile.join("")}</div><p class="hint qs-hint">신혼·생애최초·신생아의 단계 숫자는 우선·일반·추첨 물량이며 미달 시 다음 단계로 이월됩니다. 일반 가점·추첨은 공고의 면적별 비율과 법정 올림 원칙을 적용했습니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);
     localStorage.setItem(UI_MODE_KEY,simple?"simple":"advanced");
-    if(simple){initQuickFromDetail();setPanel("quick")}
+    if(simple){initQuickFromDetail();renderQuickProfileSnapshot();setPanel("quick");const complete=quickProfileState().essentialComplete;$("quickInputsFold").open=!complete;if(complete){syncQuickToDetail();calculate();renderQuickResult()}}
     else setPanel(panel||"profile");
   }
   function quickFundingCheck(sizeName){
@@ -1101,6 +1132,22 @@
     const fillCls=shortage?(stillShort>0?"bad":"ok"):timing?(stillTiming>0?"bad":"ok"):"";
     return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${fillCls}">${fillText}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ ${creditNote}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
+  function quickProbabilitySummary(picks){
+    if(!applyhomeLastRates.length)return `<div class="portfolio-odds pending"><div><span>실질 당첨 가능성</span><b>접수결과 대기</b><small>${notice.expectationsSource==="model"?"과거데이터 예측은 후보 비교에만 사용 중입니다.":"청약홈 접수결과가 나오면 법정 배정구조로 계산합니다."}</small></div><button type="button" class="ghost" data-load-actual>실제 접수결과 불러오기</button></div>`;
+    const catFor=pick=>pick.row.type!=="newly"?pick.row.type:`newly${R.eligibility(pick.key,profileData(),notice).newly?.band?.stage||3}`;
+    const results=picks.filter(pick=>pick.row).map(pick=>{
+      const area=num((notice.sizes||[]).find(item=>item.name===pick.row.size)?.area);
+      const matched=applyhomeLastRates.reduce((best,item)=>{const diff=Math.abs(parseFloat(String(item.type).replace(/[^0-9.]/g,""))-area);return diff<(best?.diff??0.06)?{item,diff}:best},null);
+      return matched?probCardResult({person:pick.key.toUpperCase(),cat:catFor(pick),type:matched.item.type},0):null;
+    }).filter(Boolean);
+    const exact=results.filter(item=>item.res.probability!=null&&item.res.confidence!=="BENCHMARK_ONLY");
+    if(!exact.length)return `<div class="portfolio-odds score"><div><span>실질 당첨 가능성</span><b>배점제 · 확률 미산출</b><small>실제 접수값은 있으나 점수분포가 없어 임의 확률을 만들지 않습니다.</small></div><span class="data-source-badge actual">실제 접수값 기반</span></div>`;
+    const people={};
+    exact.forEach(item=>{const group=people[item.card.person]||(people[item.card.person]={special:[],general:[]});(item.card.cat==="general"?group.general:group.special).push(item.res.probability)});
+    const perPerson=Object.values(people).map(group=>R.combineSamePerson(R.combineIndependent(group.special),R.combineIndependent(group.general)));
+    const family=R.combineIndependent(perPerson),excluded=results.length-exact.length;
+    return `<div class="portfolio-odds actual"><div><span>가족 조합 실질 당첨 가능성</span><b>${probPct(family)}</b><small>실제 물량·지역우선·가점/추첨·특공 단계를 반영${excluded?` · 배점제 ${excluded}건 제외`:""}</small></div><span class="data-source-badge actual">실제 접수값 기반</span></div>`;
+  }
   function renderQuickResult(){
     const profile=profileData();
     const aRows=candidateRows("a",profile),bRows=R.hasSecondApplicant(profile)?candidateRows("b",profile):[];
@@ -1125,9 +1172,9 @@
       return "자격은 충족하지만 최소 면적 조건에 맞는 일반공급 물량이 없습니다.";
     };
     const picks=[
-      {person:"나",label:"특별공급",row:plans.a.special,why:()=>whySpecial(eligA,plans.a.general)},
-      {person:"나",label:"일반공급",row:plans.a.general,why:()=>whyGeneral(eligA,plans.a.special)},
-      ...(plans.useB?[{person:"배우자",label:"특별공급",row:plans.b.special,why:()=>whySpecial(eligB,plans.b.general)},{person:"배우자",label:"일반공급",row:plans.b.general,why:()=>whyGeneral(eligB,plans.b.special)}]:[])
+      {key:"a",person:"나",label:"특별공급",row:plans.a.special,why:()=>whySpecial(eligA,plans.a.general)},
+      {key:"a",person:"나",label:"일반공급",row:plans.a.general,why:()=>whyGeneral(eligA,plans.a.special)},
+      ...(plans.useB?[{key:"b",person:"배우자",label:"특별공급",row:plans.b.special,why:()=>whySpecial(eligB,plans.b.general)},{key:"b",person:"배우자",label:"일반공급",row:plans.b.general,why:()=>whyGeneral(eligB,plans.b.special)}]:[])
     ];
     if(!picks.some(pick=>pick.row)){
       $("quickResult").innerHTML=`<div class="quick-empty"><b>현재 입력으로 신청 가능한 유형이 없습니다.</b><br>통장 가입일(일반 1순위는 보통 24개월), 무주택 체크, 생년월일이 채워졌는지 확인해 주세요. 세부 요건(예치금·재당첨 제한 등)은 상세 모드의 '자격 체크' 표에서 확인할 수 있습니다.</div>`;
@@ -1137,25 +1184,29 @@
     const planFor=size=>{if(!(size in planCache))planCache[size]=quickFundingCheck(size);return planCache[size]};
     const pickLines=picks.map((pick,index)=>{
       const row=pick.row;
-      if(!row)return `<div class="quick-pick quick-pick-empty"><div class="quick-pick-row"><div class="quick-pick-type"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>미추천</b></div><div class="quick-pick-main"><small class="qp-why">${esc(pick.why())}</small></div></div></div>`;
+      if(!row)return `<div class="portfolio-app is-empty"><div class="portfolio-app-person ${pick.key}"><small>${esc(pick.person)}</small><b>${esc(pick.label)}</b></div><div class="portfolio-app-main"><b>이번 조합에서는 미신청</b><small>${esc(pick.why())}</small></div></div>`;
       const plan=planFor(row.size);
+      const source=resultSourceMeta(row);
       let badge,detail="";
       if(!plan)badge=`<span class="fund-badge warn">자금 미확인</span>`;
       else if(plan.loanShortage>0)badge=`<span class="fund-badge bad">▲ 부족 ${formatWonShort(plan.loanShortage)}</span>`;
-      else if(plan.firstShortage)badge=`<span class="fund-badge warn">△ ${esc(plan.firstShortage.label)} 때 ${formatWonShort(plan.firstShortage.shortage)} 부족</span>`;
-      else badge=`<span class="fund-badge ok">✓ 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
+      else if(plan.firstShortage)badge=`<span class="fund-badge warn">${esc(plan.firstShortage.label)} 때 ${formatWonShort(plan.firstShortage.shortage)} 부족</span>`;
+      else badge=`<span class="fund-badge ok">자금 가능 · 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
       if(plan){
         const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
-        detail=`<div class="quick-pick-detail"><div class="qpd-top"><span>자금 상세</span><small>닫기 ◂</small></div><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div><div class="fund-net ${plan.loanShortage>0?"bad":plan.firstShortage?"warn":"ok"}">${plan.loanShortage>0?`▲ 부족 ${formatWonShort(plan.loanShortage)}`:plan.firstShortage?`△ 총액은 되지만 ${esc(plan.firstShortage.label)}(${esc(plan.firstShortage.dueText)}) 때 현금 ${formatWonShort(plan.firstShortage.shortage)} 부족`:`✓ 여유 ${formatWonShort(plan.finalSurplus)}`}</div>${quickAfterPlan(plan)}</div>`;
+        detail=`<details class="portfolio-funding"><summary>자금 계산 근거 보기</summary><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세·기타</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>입주까지 저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>예상 대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div>${quickAfterPlan(plan)}</details>`;
       }
-      return `<div class="quick-pick" data-pick="${index}">${badge}<div class="quick-pick-row"><div class="quick-pick-type ${pick.person==="배우자"?"pB":"pA"}"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="quick-pick-main"><b>${esc(row.size)} 주택형</b><small>${esc(row.seatText)} · ${esc(row.reasons.slice(1,3).join(" · "))}</small><span class="quick-pick-chance">${esc(chanceLabel(row))}</span></div></div><small class="tap-hint">자금 상세 ▸</small>${detail}</div>`;
+      return `<div class="portfolio-app"><div class="portfolio-app-person ${pick.key}"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="portfolio-app-main"><div class="portfolio-app-title"><b>${esc(row.size)} 주택형</b>${badge}</div><div class="portfolio-badges"><span class="data-source-badge ${source.cls}">${source.label}</span><span>${esc(chanceLabel(row))}</span></div><small><b>추천 근거</b> · ${esc(row.seatText)} · ${esc(row.reasons.slice(1,4).join(" · "))}</small>${detail}</div></div>`;
     }).join("");
+    const planList=Object.values(planCache).filter(Boolean);
+    const maxGap=Math.max(0,...planList.map(plan=>Math.max(plan.loanShortage||0,plan.firstShortage?.shortage||0)));
+    const fundingSummary=!planList.length?"분양가·납부일정 확인 필요":maxGap?`추천형 기준 최대 ${formatWonShort(maxGap)} 부족`:"추천형 모두 현재 가정으로 자금 가능";
     const regulated=notice.generalHeadRequired==="yes";
     const cardText=plans.useB
       ?(regulated?"규제지역 · 부부 합산 3장 (특공 2·일반 1, 일반 1순위는 세대주만)":"부부 합산 4장 (각자 특공+일반)")
       :(regulated?"규제지역 · 일반 1순위는 세대주만":"특공+일반 최대 2장");
     const verifiedNote=notice.verified?"":`<span class="quick-hero-warn">⚠ 검수 전 · 원문 대조 권장</span>`;
-    $("quickResult").innerHTML=`<article class="quick-hero"><div class="quick-hero-top"><span class="kicker">RECOMMENDATION</span>${verifiedNote}</div><h3>${esc(notice.projectName||"공고")}<span class="quick-hero-tag"> · 이렇게 넣으세요</span></h3><p class="quick-hero-guide">${esc(cardText)}</p><div class="quick-picks">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">전체 후보·근거 보기</button><button type="button" class="ghost" data-quick-go="finance">자금 플랜 자세히</button><button type="button" class="ghost" data-quick-go="notice">다른 공고 넣기</button></div></article>`;
+    $("quickResult").innerHTML=`<article class="portfolio-hero"><div class="portfolio-top"><div><div class="quick-hero-top"><span class="kicker">FAMILY APPLICATION PLAN</span>${verifiedNote}</div><h3>${esc(notice.projectName||"공고")}</h3><p>${esc(cardText)}</p></div><div class="portfolio-verdict"><small>자금 판정</small><b class="${maxGap?"bad":"ok"}">${esc(fundingSummary)}</b></div></div>${quickProbabilitySummary(picks)}<div class="portfolio-apps">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">근거·전체 후보</button><button type="button" class="ghost" data-quick-go="finance">자금 상세</button><button type="button" class="ghost" data-quick-go="notice">다른 공고</button></div></article>`;
   }
   // ── 인근 실거래 시세 (국토교통부 실거래가 API, CORS 허용)
   const TRADE_KEY_STORE="subscription_trade_key_v3";
@@ -1367,7 +1418,7 @@
       });
       applyhomeLastRates=[...byType.values()].map(item=>({...item,rate:item.supply?Math.round(item.requests/item.supply*10)/10:0,cutline:item.cutline||item.cutlineEtc}));
       applyhomeLastHouse=house;
-      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — ${pendingHint||"일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요."}</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p><div id="probLab"></div>`;
+      target.innerHTML=`${generalPending?`<p class="hint" style="margin:0 0 8px"><b>특별공급 접수 결과만 반영</b> — ${pendingHint||"일반공급(1·2순위)은 아직 집계 전입니다. 일반 접수가 끝나면 다시 불러오세요."}</p>`:""}<div class="table-wrap"><table><thead><tr><th>주택형</th><th>일반공급</th><th>일반 접수</th><th>일반 경쟁률</th><th>최저가점<small>(해당지역)</small></th><th>평균가점</th><th>특공 경쟁률</th></tr></thead><tbody>${applyhomeLastRates.map(item=>`<tr><td><b>${esc(item.type)}</b>${item.special?.parts.length?`<br><span class="muted">${esc(item.special.parts.join(" · "))}</span>`:""}</td><td class="num-cell">${item.supply}</td><td class="num-cell">${item.requests.toLocaleString("ko-KR")}</td><td class="num-cell">${item.rate?item.rate+":1":"-"}</td><td class="num-cell">${item.cutline||"-"}</td><td class="num-cell">${item.avg||"-"}</td><td class="num-cell">${item.special?.rate?item.special.rate+":1":"-"}</td></tr>`).join("")}</tbody></table></div><button type="button" id="applyhomeApply" class="ghost">전용면적이 일치하는 주택형에 경쟁률·커트라인 일괄 적용</button><p class="hint">다른 단지 실적을 참고값으로 쓸 때는 입지·분양가 차이를 감안해 직접 보정하세요. 특공 경쟁률은 유형 합산 평균이며 유형별 격차는 위 상세를 참고하세요.</p>`;
       renderProbLab();
       if(options.autoApply&&applyhomeLastRates.length)applyhomeApplyRates();
       return true;
@@ -1448,12 +1499,19 @@
   const probPct=p=>p==null?"-":`${(p*100).toFixed(p*100>=10?1:2)}%`;
   function renderProbLab(){
     const lab=$("probLab");if(!lab)return;
+    const sourceState=$("probSourceState");
+    if(!applyhomeLastRates.length){
+      if(sourceState){sourceState.className="data-source-badge pending";sourceState.textContent="접수결과 필요"}
+      lab.innerHTML=`<div class="prob-empty"><div><b>실제 접수결과가 나오면 자동 계산합니다.</b><p>가점·추첨, 특별공급 단계, 지역우선을 분리해 가족 신청 조합의 확률을 계산합니다. 다자녀·노부모는 배점제이므로 점수분포가 없으면 확률을 표시하지 않습니다.</p></div><button type="button" class="ghost" data-open-applyhome>접수결과 불러오기</button></div>`;
+      return;
+    }
+    if(sourceState){sourceState.className="data-source-badge actual";sourceState.textContent="실제 접수값 기반"}
     const state=loadProbState();
     if(!Array.isArray(state.cards)||!state.cards.length)state.cards=[{person:"A",cat:"general",type:applyhomeLastRates[0]?.type||""}];
     const types=applyhomeLastRates.map(item=>item.type);
     state.cards.forEach(card=>{if(!types.includes(card.type))card.type=types[0]||""});
     saveProbState(state);
-    lab.innerHTML=`<details class="prob-panel"${state.open?" open":""}><summary>🎯 우리 부부 카드 조합 · 실질 당첨확률</summary>
+    lab.innerHTML=`<details class="prob-panel" open><summary>카드 조합 조정</summary>
       <p class="hint">표면 경쟁률이 아니라 <b>실제 배정물량(가점/추첨 분리, 특공 단계별)과 지역우선</b>으로 계산합니다. 자금상한을 넣으면 층별 가격분포로 '계약 가능한 당첨확률'을 따로 보여줍니다.</p>
       <div class="prob-cap"><label>자금상한(분양가 기준) <input id="probCap" type="number" step="0.1" min="0" inputmode="decimal" value="${esc(state.cap||"")}"> 억원 <span class="muted">비우면 상한 미반영</span></label></div>
       <div id="probCards">${state.cards.map((card,i)=>`<div class="prob-row" data-i="${i}">
@@ -1477,6 +1535,7 @@
       const field=event.target.dataset.pf,row=event.target.closest("[data-i]");
       if(field&&row&&current.cards[+row.dataset.i]){current.cards[+row.dataset.i][field]=event.target.value;current.open=true;saveProbState(current)}
     };
+    computeProbLab();
   }
   function computeProbLab(){
     const state=loadProbState();
@@ -1484,13 +1543,13 @@
     const results=(state.cards||[]).map(card=>probCardResult(card,capWon)).filter(Boolean);
     const out=$("probOut");
     if(!results.length){out.innerHTML="<p class='muted'>카드가 없습니다. 카드를 추가한 뒤 계산하세요.</p>";return}
-    const CONF={EXACT:["정확","ok"],ESTIMATE:["추정","est"],RANGE:["범위","est"],BENCHMARK_ONLY:["무작위 가정 참고치 · 실제 확률 아님","bench"],NOT_CALCULABLE:["계산 불가","bad"]};
+    const CONF={EXACT:["실제 접수값 기반","ok"],ESTIMATE:["가정 포함","est"],RANGE:["범위","est"],BENCHMARK_ONLY:["배점제 · 확률 미산출","bench"],NOT_CALCULABLE:["계산 불가","bad"]};
     const personLabel=value=>value==="B"?"배우자 B":"본인 A";
     const catLabel=value=>(PROB_CATS.find(([key])=>key===value)||["","?"])[1];
     const cardHtml=results.map(({card,res,detail,share})=>{
       const [confText,confCls]=CONF[res.confidence]||["",""];
       let main;
-      if(res.confidence==="BENCHMARK_ONLY")main=`무작위 가정 참고치 <b>${probPct(res.benchmark)}</b> · 정성평가 <b>${esc(res.qualitativeLabel)}</b> — 배점순 선발이라 점수분포 없이 실제 확률 계산 불가${num(card.manual)>0?`<br>수동 입력 확률 <b>${num(card.manual)}%</b> <span class="prob-badge est">사용자 지정</span> — 가족 합산의 기준 시나리오에 반영`:""}`;
+      if(res.confidence==="BENCHMARK_ONLY")main=`배점순 선발 · 정성평가 <b>${esc(res.qualitativeLabel)}</b> — 지원자 점수분포가 없어 실제 당첨확률 계산 불가${num(card.manual)>0?`<br>사용자 시나리오 <b>${num(card.manual)}%</b> <span class="prob-badge est">직접 가정</span> — 공식 확률이 아닌 가족 합산 비교용`:""}`;
       else if(res.probability==null)main="접수 데이터가 없어 계산할 수 없습니다";
       else main=`법적 당첨확률 <b>${probPct(res.probability)}</b>`;
       const shareText=share?(share.share!=null&&res.probability!=null&&res.confidence!=="BENCHMARK_ONLY"?`계약 가능한 당첨확률 <b>${probPct(res.probability*share.share)}</b> — ${esc(share.note)}`:esc(share.note)):"";
@@ -1941,7 +2000,7 @@
   $("backToQuick").addEventListener("click",()=>setUiMode(true));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",updateQuickVisibility));
   let quickSyncTimer;
-  const quickLiveSync=()=>{clearTimeout(quickSyncTimer);quickSyncTimer=setTimeout(()=>{syncQuickToDetail();if($("quickResult").innerHTML){calculate();renderQuickResult()}},500)};
+  const quickLiveSync=()=>{clearTimeout(quickSyncTimer);quickSyncTimer=setTimeout(()=>{syncQuickToDetail();renderQuickProfileSnapshot();if($("quickResult").innerHTML){calculate();renderQuickResult()}},500)};
   QUICK_FIELD_MAP.forEach(([from])=>$(from)?.addEventListener("input",quickLiveSync));
   $("quickRepayMode")?.addEventListener("change",()=>{quickLiveSync();updateQuickLoanFoldInfo()});
   $("quickCreditAdd").addEventListener("click",()=>{const list=loadCredits();list.push({name:"",amount:0,rate:6.5,mode:"interest",years:5});saveCredits(list);renderCredits();$("quickCreditList").querySelector(".credit-item:last-child .credit-name")?.focus()});
@@ -1954,14 +2013,20 @@
   updateQuickLoanFoldInfo();
   ["quickNoHome","quickNeverHome","quickHead"].forEach(id=>$(id)?.addEventListener("change",quickLiveSync));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",quickLiveSync));
-  $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickResult()});
+  $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickProfileSnapshot();renderQuickResult();$("quickInputsFold").open=false;$("quickResult").scrollIntoView({behavior:"smooth",block:"start"})});
+  $("quickProfileSnapshot").addEventListener("click",event=>{
+    if(event.target.closest("[data-edit-profile]")){const fold=$("quickInputsFold");fold.open=true;fold.scrollIntoView({behavior:"smooth",block:"start"});return}
+    if(event.target.closest("[data-refresh-plan]")){syncQuickToDetail();calculate();renderQuickResult()}
+  });
   $("quickSupplyTable").addEventListener("click",event=>{const button=event.target.closest("[data-price-size]");if(button)showPriceDialog(button.dataset.priceSize)});
   $("quickResult").addEventListener("click",event=>{
+    if(event.target.closest("[data-load-actual]")){setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus();return}
     const button=event.target.closest("[data-quick-go]");
     if(button){setUiMode(false,button.dataset.quickGo);return}
     const pick=event.target.closest(".quick-pick");
     if(pick)pick.classList.toggle("open");
   });
+  $("probLab").addEventListener("click",event=>{if(event.target.closest("[data-open-applyhome]")){setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus()}});
   $("priceChips").addEventListener("click",event=>{
     const chip=event.target.closest("[data-price]");
     if(!chip)return;
@@ -2025,7 +2090,7 @@ $("planSize").addEventListener("change",()=>{renderFinanceControls(true);renderF
   FINANCE_IDS.filter(id=>id!=="planSize").forEach(id=>$(id)?.addEventListener("input",()=>{queueFundingSave();clearTimeout(fundingRenderTimer);fundingRenderTimer=setTimeout(renderFundingPlan,250)}));
   $("calculateFunding").addEventListener("click",renderFundingPlan);
 
-  wrapSuffixInputs();setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderFundingPlan();
+  wrapSuffixInputs();setupDateInputs();loadProfile();setupMoneyInputs();attachMoneyEcho();loadFundingInputs();renderNotice();renderProfileSummary();calculate();renderProbLab();renderFundingPlan();
   setUiMode((localStorage.getItem(UI_MODE_KEY)||"simple")==="simple");
   loadLiveNotices();
 })();
