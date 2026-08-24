@@ -1460,6 +1460,7 @@
         <select data-pf="person">${[["A","본인 A"],["B","배우자 B"]].map(([value,label])=>`<option value="${value}"${card.person===value?" selected":""}>${label}</option>`).join("")}</select>
         <select data-pf="cat">${PROB_CATS.map(([value,label])=>`<option value="${value}"${card.cat===value?" selected":""}>${label}</option>`).join("")}</select>
         <select data-pf="type">${types.map(type=>`<option value="${esc(type)}"${card.type===type?" selected":""}>${esc(type)}</option>`).join("")}</select>
+        <input data-pf="manual" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="수동%" value="${esc(card.manual||"")}" title="다자녀·노부모(배점제) 카드의 예상 당첨확률(%)을 직접 넣으면 가족 합산에 반영됩니다">
         <button type="button" class="ghost" data-pdel="${i}">✕</button></div>`).join("")}</div>
       <div class="prob-actions"><button type="button" class="ghost" id="probAdd">＋ 카드 추가</button><button type="button" id="probRun">당첨확률 계산</button></div>
       <div id="probOut"></div></details>`;
@@ -1489,7 +1490,7 @@
     const cardHtml=results.map(({card,res,detail,share})=>{
       const [confText,confCls]=CONF[res.confidence]||["",""];
       let main;
-      if(res.confidence==="BENCHMARK_ONLY")main=`무작위 가정 참고치 <b>${probPct(res.benchmark)}</b> · 정성평가 <b>${esc(res.qualitativeLabel)}</b> — 배점순 선발이라 점수분포 없이 실제 확률 계산 불가`;
+      if(res.confidence==="BENCHMARK_ONLY")main=`무작위 가정 참고치 <b>${probPct(res.benchmark)}</b> · 정성평가 <b>${esc(res.qualitativeLabel)}</b> — 배점순 선발이라 점수분포 없이 실제 확률 계산 불가${num(card.manual)>0?`<br>수동 입력 확률 <b>${num(card.manual)}%</b> <span class="prob-badge est">사용자 지정</span> — 가족 합산의 기준 시나리오에 반영`:""}`;
       else if(res.probability==null)main="접수 데이터가 없어 계산할 수 없습니다";
       else main=`법적 당첨확률 <b>${probPct(res.probability)}</b>`;
       const shareText=share?(share.share!=null&&res.probability!=null&&res.confidence!=="BENCHMARK_ONLY"?`계약 가능한 당첨확률 <b>${probPct(res.probability*share.share)}</b> — ${esc(share.note)}`:esc(share.note)):"";
@@ -1500,26 +1501,32 @@
     }).join("");
     const persons={};
     results.forEach(result=>{
-      if(result.res.probability==null)return;
+      let p=result.res.probability,manualUsed=false;
+      if(p==null&&result.res.confidence==="BENCHMARK_ONLY"&&num(result.card.manual)>0){p=Math.min(1,num(result.card.manual)/100);manualUsed=true}
+      if(p==null)return;
       const group=persons[result.card.person]||(persons[result.card.person]={special:[],general:[]});
-      (result.card.cat==="general"?group.general:group.special).push(result);
+      (result.card.cat==="general"?group.general:group.special).push({...result,p,manualUsed});
     });
-    const shareOf=result=>result.share&&result.share.share!=null?result.share.share:1;
-    const personRows=Object.entries(persons).map(([person,group])=>{
-      const pSpecial=R.combineIndependent(group.special.map(result=>result.res.probability));
-      const pGeneral=R.combineIndependent(group.general.map(result=>result.res.probability));
-      return {person,
-        p:R.combineSamePerson(pSpecial,pGeneral),
-        pAff:R.combineSamePersonAffordable(pSpecial,group.special.length?shareOf(group.special[0]):1,pGeneral,group.general.length?shareOf(group.general[0]):1)};
-    });
-    const benchCards=results.filter(result=>result.res.confidence==="BENCHMARK_ONLY");
-    const family=R.combineIndependent(personRows.map(row=>row.p));
-    const familyAff=R.combineIndependent(personRows.map(row=>row.pAff));
+    const shareOf=item=>item.share&&item.share.share!=null?item.share.share:1;
+    const personCalc=(group,includeManual)=>{
+      const specials=group.special.filter(item=>includeManual||!item.manualUsed);
+      const pSpecial=R.combineIndependent(specials.map(item=>item.p));
+      const pGeneral=R.combineIndependent(group.general.map(item=>item.p));
+      return {p:R.combineSamePerson(pSpecial,pGeneral),
+        pAff:R.combineSamePersonAffordable(pSpecial,specials.length?shareOf(specials[0]):1,pGeneral,group.general.length?shareOf(group.general[0]):1)};
+    };
+    const personRows=Object.entries(persons).map(([person,group])=>({person,base:personCalc(group,true),cons:personCalc(group,false)}));
+    const anyManual=results.some(result=>result.res.confidence==="BENCHMARK_ONLY"&&num(result.card.manual)>0);
+    const benchNoManual=results.filter(result=>result.res.confidence==="BENCHMARK_ONLY"&&!(num(result.card.manual)>0));
+    const family=R.combineIndependent(personRows.map(row=>row.base.p));
+    const familyAff=R.combineIndependent(personRows.map(row=>row.base.pAff));
+    const familyCons=R.combineIndependent(personRows.map(row=>row.cons.p));
     out.innerHTML=`${cardHtml}
-      <div class="prob-family"><b>가족 합산 (추첨구조 카드만)</b>
-        ${personRows.map(row=>`<div>${personLabel(row.person)}: 당첨 <b>${probPct(row.p)}</b>${capWon?` · 상한 이내 계약 가능 <b>${probPct(row.pAff)}</b>`:""} <span class="muted">같은 단지 특공→일반 순차 합산(특공 당첨 시 일반 제외)</span></div>`).join("")}
+      <div class="prob-family"><b>가족 합산 — 위 카드 조합으로 하나라도 당첨될 확률</b>
+        ${personRows.map(row=>`<div>${personLabel(row.person)}: 당첨 <b>${probPct(row.base.p)}</b>${capWon?` · 상한 이내 계약 가능 <b>${probPct(row.base.pAff)}</b>`:""} <span class="muted">같은 단지 특공→일반 순차 합산(특공 당첨 시 일반 제외)</span></div>`).join("")}
         <div class="prob-total">가족 중 1명 이상 당첨 <b>${probPct(family)}</b>${capWon?` · 상한 이내 계약 가능 <b>${probPct(familyAff)}</b>`:""} <span class="prob-badge est">추정</span></div>
-        ${benchCards.length?`<div class="muted">＋ 배점순 카드 ${benchCards.length}건(${benchCards.map(result=>catLabel(result.card.cat)).join(", ")})은 점수분포 미공개로 수치 합산에서 제외했습니다. 위 카드의 참고치·정성평가만 확인하세요.</div>`:""}
+        ${anyManual?`<div class="muted">배점제 수동입력 반영 시나리오 — 보수(수동카드 0% 가정): <b>${probPct(familyCons)}</b> · 기준(입력 확률 반영): <b>${probPct(family)}</b></div>`:""}
+        ${benchNoManual.length?`<div class="muted">＋ 배점제 카드 ${benchNoManual.length}건(${benchNoManual.map(result=>catLabel(result.card.cat)).join(", ")})은 점수분포 미공개로 합산에서 빠져 있습니다. 카드 행의 <b>수동%</b>에 예상 확률을 넣으면 합산에 반영됩니다.</div>`:""}
         <div class="muted">서로 다른 카드의 경쟁자 풀이 겹칠 수 있어 독립근사 결과입니다. 부부 중복당첨 시 접수시각이 빠른 1건만 유효하지만 '1명 이상 당첨' 확률에는 영향이 없습니다. 접수건수에는 서류 부적격자가 포함될 수 있습니다.</div>
       </div>`;
   }
