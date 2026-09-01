@@ -63,8 +63,8 @@
     "residenceRegion","residenceStart","lastHomeDisposal","noHome","neverHome","specialClean","reWinClean",
     "singleHouseholdKind","unmarriedChildRegistered","marriageDate","children","fetuses","marriageChildren","infants","youngestBirth","assetOk",
     "householdSize","householdSizeAuto","aMonthlyIncome","bMonthlyIncome",
-    "aAccount","aBirth","aOtherDependents","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5",
-    "bAccount","bBirth","bOtherDependents","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5",
+    "aAccount","aBirth","aOtherDependents","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","aDepositTotal","aDepositCount",
+    "bAccount","bBirth","bOtherDependents","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bDepositTotal","bDepositCount",
     "minArea","mode","bothApply","allowSpecialGeneral","diversify"
   ];
   const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
@@ -126,7 +126,7 @@
       const exp=sizeExpectation(row.name);
       return `<tr data-exp-size="${esc(row.name)}">
       <td><b>${esc(row.name)}</b> <span class="muted">${num(row.area).toFixed(2)}㎡</span></td>
-      <td class="num-cell"><input data-exp-field="cutline" type="number" min="0" max="84" step="1" value="${exp.cutline||""}" placeholder="예: 63"></td>
+      <td class="num-cell"><input data-exp-field="cutline" type="number" min="0" max="${notice.housingType==="public"?99999:84}" step="1" value="${exp.cutline||""}" placeholder="${notice.housingType==="public"?"저축총액컷 만원":"예: 63"}"></td>
       <td class="num-cell"><input data-exp-field="generalRate" type="number" min="0" step="0.1" value="${exp.generalRate||""}" placeholder="예: 45"></td>
       <td class="num-cell"><input data-exp-field="specialRate" type="number" min="0" step="0.1" value="${exp.specialRate||""}" placeholder="예: 12"></td></tr>`;
     }).join(""):`<tr><td colspan="4" class="muted">먼저 모집공고에서 평형을 입력해 주세요.</td></tr>`;
@@ -230,6 +230,7 @@
     const c=id=>$(id).checked;
     const person=key=>({
       account:d(key+"Account"),monthlyIncome:num(v(key+"MonthlyIncome")),birth:d(key+"Birth"),otherDependents:num(v(key+"OtherDependents")),
+      depositTotal:num(v(key+"DepositTotal"))*10000,depositCount:num(v(key+"DepositCount")),
       head:c(key+"Head"),deposit:c(key+"Deposit"),tax5:c(key+"Tax5"),elder3:c(key+"Elder3"),elderNoHome:c(key+"ElderNoHome"),agency:c(key+"Agency"),
       threeGeneration:c(key+"ThreeGeneration"),singleParent5:c(key+"SingleParent5")
     });
@@ -529,7 +530,23 @@
           winChance=Math.max(0,Math.min(1,1/exp.specialRate));
           reasons.push(`특공 ${expectationSourceLabel()} 경쟁률 ${exp.specialRate}:1 기준`);
         }
-        if(type==="general"){
+        if(type==="general"&&notice.housingType==="public"){
+          // 공공분양(국민주택): 가점제 대신 순위순차제 — 저축총액(40㎡ 초과) 또는 납입횟수(40㎡ 이하)
+          const st=R.publicGeneralStatus(personKey,profile,notice,size.area);
+          seatText=`일반 ${supply}세대 · 순위순차제`;
+          reasons.push(st.basis,`순차 ${st.sequence}${st.sequence===1?`(무주택 ${st.noHomeYears.toFixed(1)}년)`:"(무주택 3년 미만 — 순차 1 마감 시 기회 없음)"}`);
+          reasons.push(st.smallArea?`납입 ${st.count||"?"}회`:`저축총액 ${formatWonShort(st.savings)}`);
+          st.warnings.forEach(warning=>reasons.push("⚠ "+warning));
+          if(exp.cutline>0&&!st.smallArea){
+            const cutWon=exp.cutline*10000;
+            winChance=st.sequence===1&&st.savings>=cutWon?1:0;
+            reasons.push(`저축총액 컷 ${formatWonShort(cutWon)} ${st.savings>=cutWon?"충족":"미달"} (커트라인 칸=만원 단위)`);
+          }else if(!st.smallArea){
+            reasons.push("예상 커트라인 칸에 저축총액 컷(만원)을 넣으면 충족 여부 판정 — 서울 인기단지 통상 2,000만~2,700만원대");
+            score+=Math.min(30,st.savings/1000000);
+          }
+          if(st.sequence!==1)score-=25;
+        }else if(type==="general"){
           const alloc=R.generalAllocation(supply,size.area,notice.pointRates);
           seatText=`가점 ${alloc.point} + 추첨 ${alloc.lottery}`;
           score+=(generalScore.points-45)*.45+alloc.lottery*1.4;
@@ -567,6 +584,11 @@
   }
   function chanceLabel(row){
     if(row.type==="multi"||row.type==="elder")return "배점순 선발 · 실제 확률 계산 불가";
+    if(row.type==="general"&&notice.housingType==="public"){
+      if(row.winChance>=1)return "저축총액 컷 충족 · 당첨권";
+      if(row.winChance===0)return "저축총액 컷 미달";
+      return `순차제 · 저축총액순 (비교값 ${row.score.toFixed(1)})`;
+    }
     if(row.winChance===null||row.winChance===undefined)return `전략 비교값 ${row.score.toFixed(1)}`;
     if(row.winChance>=1)return "가점 당첨권";
     const source=notice.expectationsSource==="actual"?"실제 접수값 기반":notice.expectationsSource==="model"?"과거데이터 예측":"참고값";
@@ -1016,7 +1038,8 @@
       date:fmtDate(row.dueDate)||(row.kind==="contract"?fmtDate(notice.expectedContractDate)||"계약시":row.kind==="balance"?fmtDate(notice.expectedMoveInDate)||"입주":"?")
     }));
     const timeline=milestones.length?`<div class="qn-vtimeline">${milestones.map(m=>`<div class="qn-vmile"><i></i><small>${esc(m.date)}</small><span>${esc(m.label)}</span><b>${m.rate?`${Math.round(m.rate*10)/10}%`:""}</b></div>`).join("")}</div>`:"";
-    el.innerHTML=priceTable||timeline?`<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
+    const publicChip=notice.housingType==="public"?`<p class="qn-public-chip">🏛 공공분양(국민주택) — 일반공급은 가점이 아니라 <b>저축총액·납입횟수 순</b>으로 뽑습니다. 프로필에 납입인정총액을 입력하세요.</p>`:"";
+    el.innerHTML=priceTable||timeline?`${publicChip}<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`${publicChip}<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
     renderQuickSupplyTable();
   }
   function showPriceDialog(sizeName){
@@ -1726,7 +1749,7 @@
         announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
         rceptStart:R.normalizeDate(applyhomeVal(detail,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),rceptEnd:R.normalizeDate(applyhomeVal(detail,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),
         pblancUrl:String(applyhomeVal(detail,"PBLANC_URL")||""),
-        housingType:"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
+        housingType:/국민/.test(String(applyhomeVal(detail,"HOUSE_DTL_SECD_NM","HOUSE_SECD_NM")))?"public":"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
         specialMonths:6,generalMonths:remainder?0:24,generalHeadRequired:remainder?"no":overheated||adjusted?"yes":"no",
         pointRates:remainder?{small:0,medium:0,large:0}:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
         verified:false,sourceFile:"청약홈 API 자동 구성",parseConfidence:70,
@@ -1870,7 +1893,8 @@
     const warnings=[];
     if(!notice.verified)warnings.push("이 공고의 자동 추출 숫자가 아직 검수되지 않았습니다.");
     if(notice.remainder)warnings.push("무순위(잔여세대) 공고입니다: 청약통장·가점 없이 전량 추첨하며, 무주택·거주지역 등 세부 자격은 공고문 원문을 확인하세요. 특별공급·가점제 물량은 없습니다.");
-    if(notice.housingType!=="private")warnings.push("현재 전략 엔진은 민영주택 분양을 우선 지원합니다. 국민·공공주택은 선정규칙 모듈을 별도로 적용해야 합니다.");
+    if(notice.housingType==="public")warnings.push("공공분양(국민주택) 공고입니다: 일반공급은 가점제가 아닌 순위순차제(저축총액·납입횟수)로 계산하며, 특별공급 소득·자산(부동산 2.15억/자동차 3,803만원 등) 기준은 공고문으로 직접 확인하세요. 예상 커트라인 칸에는 가점 대신 저축총액 컷(만원)을 입력합니다.");
+    else if(notice.housingType!=="private")warnings.push("주택유형이 '기타/검토 필요'로 되어 있습니다. 공고 관리에서 민영주택 또는 국민·공공주택을 선택해 주세요.");
     if(summary.type==="engaged")warnings.push("혼인 예정·미신고 상태는 민영 신혼부부 특별공급의 법적 배우자로 인정되지 않아 신청자 A 단독으로 계산했습니다.");
     if(summary.type==="married"&&!profile.marriageDate)warnings.push("혼인신고일이 없어 신혼부부 7년 요건을 판정할 수 없습니다.");
     const expCount=notice.sizes.filter(size=>{const exp=sizeExpectation(size.name);return exp.cutline||exp.generalRate||exp.specialRate}).length;

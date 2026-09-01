@@ -873,6 +873,41 @@
     return {type,label,marriageYears,legalSpouse:hasLegalSpouse(profile),secondApplicant:hasSecondApplicant(profile),specialChildren:specialChildCount(profile),generalChildren:generalChildCount(profile),automaticHouseholdSize:automaticHouseholdSize(profile)};
   }
 
+  // ===== 국민주택(공공분양) 일반공급: 순위순차제 =====
+  // 무주택기간 기산일: 만 30세 도달일과 혼인신고일 중 빠른 날, 이후 주택 처분이 있었으면 처분일
+  function noHomePeriodStart(personKey,profile){
+    const p=profile.people?.[personKey]||{};
+    const birth=normalizeDate(p.birth);
+    const marriage=hasLegalSpouse(profile)?normalizeDate(profile.marriageDate):"";
+    let start=birth?addYears(birth,30):"";
+    if(marriage&&(!start||marriage<start))start=marriage;
+    const disposal=profile.neverHome?"":normalizeDate(profile.lastHomeDisposal);
+    if(disposal&&(!start||disposal>start))start=disposal;
+    return start;
+  }
+  function publicGeneralStatus(personKey,profile,notice,area){
+    const p=profile.people?.[personKey]||{};
+    const savings=won(p.depositTotal);
+    const count=integer(p.depositCount);
+    const accountMonths=monthsBetween(p.account,notice.noticeDate);
+    const monthsRequired=Number(notice.generalMonths||24);
+    const headOk=notice.generalHeadRequired==="no"||p.head;
+    const missing=[];
+    if(!profile.noHome)missing.push("국민주택은 무주택세대구성원만 신청 가능");
+    if(!headOk)missing.push("세대주 아님(규제지역 국민주택 1순위는 세대주만)");
+    if(!profile.reWinClean)missing.push("재당첨 제한 확인 필요");
+    if(accountMonths<monthsRequired)missing.push(`통장 ${Math.floor(accountMonths)}개월/${monthsRequired}개월 필요`);
+    if(count&&count<monthsRequired)missing.push(`납입 ${count}회/${monthsRequired}회 필요`);
+    const smallArea=(Number(area)||0)>0&&(Number(area)||0)<=40;
+    const start=noHomePeriodStart(personKey,profile);
+    const noHomeYears=profile.noHome&&start&&normalizeDate(notice.noticeDate)?Math.max(0,yearsBetween(start,notice.noticeDate)):0;
+    const warnings=[];
+    if(!count)warnings.push("납입 회차 미입력 — 통장 가입기간으로만 1순위를 판정했습니다(연체 없이 매월 납입 가정)");
+    if(!savings&&!smallArea)warnings.push("납입인정총액 미입력 — 순차 내 경쟁력(저축총액 순) 판정 불가");
+    return {rank:missing.length?2:1,missing,sequence:noHomeYears>=3?1:2,noHomeYears,savings,count,smallArea,
+      basis:smallArea?"전용 40㎡ 이하 → 납입 횟수 많은 순":"전용 40㎡ 초과 → 저축총액(월 최대 25만원 인정) 많은 순",warnings};
+  }
+
   function eligibility(personKey,profile,notice){
     const p=profile.people[personKey];
     const type=profileType(profile);
@@ -915,6 +950,18 @@
       result[supplyType].band=band;
       if(band.stage===0){result[supplyType].ok=false;result[supplyType].reason=band.label;}
     });
+    if(notice.housingType==="public"){
+      // 공공분양: 일반공급은 가점제가 아니라 순위순차제, 특공은 소득·자산 기준이 민영과 다름
+      ["agency","multi","newly","elder","first","baby"].forEach(key=>{
+        if(result[key].ok)result[key].reason+=" · 공공 특공: 소득·자산(부동산·자동차) 기준 별도 — 공고문 확인";
+      });
+      const status=publicGeneralStatus(personKey,profile,notice,0);
+      result.general=!secondAllowed
+        ?{ok:false,reason:"현재 프로필에는 법적 배우자 B가 없음"}
+        :status.missing.length
+          ?{ok:false,reason:"국민주택 1순위 미충족: "+status.missing.join(" · "),publicStatus:status}
+          :{ok:true,reason:`국민주택 1순위 · 순차 ${status.sequence}(무주택 ${status.noHomeYears.toFixed(1)}년) · 저축총액 ${Math.round(status.savings/10000).toLocaleString("ko-KR")}만원`,publicStatus:status};
+    }
     return result;
   }
 
@@ -1013,7 +1060,7 @@
     return clamp01(1-(list||[]).reduce((product,p)=>product*(1-clamp01(p||0)),1));
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,noHomePeriodStart,publicGeneralStatus,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

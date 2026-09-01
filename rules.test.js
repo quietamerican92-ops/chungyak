@@ -258,3 +258,28 @@ assert.ok(near(R.combineSamePersonAffordable(1/138,9/32,3/368,1),(1/138)*(9/32)+
 const pClavion=R.combineSamePerson(1/138,3/368);
 assert.ok(near(R.combineIndependent([pClavion,3/1912]),1-(1-pClavion)*(1-3/1912)));
 console.log("rules.test.js: actual-result probability functions passed");
+
+// ===== 공공분양(국민주택) 순위순차제 =====
+const publicProfile=JSON.parse(JSON.stringify(marriedProfile));
+publicProfile.people.a.depositTotal=8000000;publicProfile.people.a.depositCount=80;
+publicProfile.people.b.depositTotal=25000000;publicProfile.people.b.depositCount=100;
+const publicNotice={noticeDate:"2026-08-14",housingType:"public",specialMonths:6,generalMonths:24,generalHeadRequired:"yes"};
+const stA=R.publicGeneralStatus("a",publicProfile,publicNotice,59.99);
+assert.strictEqual(stA.rank,1);            // 통장 24개월+·납입 24회+·세대주·무주택
+assert.strictEqual(stA.sequence,1);        // 무주택 3년 이상(만30세 2020-01-01 기산)
+assert.ok(stA.noHomeYears>6&&stA.noHomeYears<7);
+assert.strictEqual(stA.savings,8000000);
+assert.strictEqual(stA.smallArea,false);
+const stSmall=R.publicGeneralStatus("a",publicProfile,publicNotice,39.5);
+assert.strictEqual(stSmall.smallArea,true); // 40㎡ 이하 → 납입횟수 순
+const noHead=JSON.parse(JSON.stringify(publicProfile));noHead.people.b.head=false;
+assert.strictEqual(R.publicGeneralStatus("b",noHead,publicNotice,59.99).rank,2);
+const eligPublic=R.eligibility("a",publicProfile,publicNotice);
+assert.strictEqual(eligPublic.general.ok,true);
+assert.ok(/국민주택 1순위/.test(eligPublic.general.reason));
+assert.ok(/순차 1/.test(eligPublic.general.reason));
+assert.ok(/공공 특공/.test(eligPublic.multi.reason)); // 특공에 자산기준 확인 문구
+// 민영 공고에서는 기존 로직 유지
+const eligPrivate=R.eligibility("a",publicProfile,{...publicNotice,housingType:"private"});
+assert.ok(/민영주택 1순위/.test(eligPrivate.general.reason));
+console.log("rules.test.js: public-housing sequence rules passed");

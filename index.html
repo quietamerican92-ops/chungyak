@@ -222,6 +222,8 @@
             <label>청약통장 가입일<input id="aAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
             <label>생년월일<input id="aBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
             <label>추가 인정 부양가족 수<input id="aOtherDependents" type="number" min="0" value="0"><span class="field-help">직계존속·성년 미혼자녀 등</span></label>
+            <label>납입인정총액(만원)<input id="aDepositTotal" type="number" min="0" step="10" inputmode="numeric" placeholder="예: 800"><span class="field-help">공공분양(국민주택) 일반공급용 · 월 최대 25만원 인정, 청약홈에서 확인</span></label>
+            <label>납입인정 회차<input id="aDepositCount" type="number" min="0" step="1" inputmode="numeric" placeholder="예: 80"><span class="field-help">공공분양 1순위(24회)·40㎡ 이하 순차 판정용</span></label>
           </div>
           <div class="score-results">
             <div><span>일반공급 가점</span><output id="aGeneralScore">자동 계산</output><small id="aGeneralBreakdown"></small></div>
@@ -245,6 +247,8 @@
             <label>청약통장 가입일<input id="bAccount" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
             <label>생년월일<input id="bBirth" type="text" class="manual-date" inputmode="numeric" placeholder="YYYY.MM.DD" autocomplete="off"></label>
             <label>추가 인정 부양가족 수<input id="bOtherDependents" type="number" min="0" value="0"><span class="field-help">직계존속·성년 미혼자녀 등</span></label>
+            <label>납입인정총액(만원)<input id="bDepositTotal" type="number" min="0" step="10" inputmode="numeric" placeholder="예: 800"><span class="field-help">공공분양(국민주택) 일반공급용 · 월 최대 25만원 인정, 청약홈에서 확인</span></label>
+            <label>납입인정 회차<input id="bDepositCount" type="number" min="0" step="1" inputmode="numeric" placeholder="예: 80"><span class="field-help">공공분양 1순위(24회)·40㎡ 이하 순차 판정용</span></label>
           </div>
           <div class="score-results">
             <div><span>일반공급 가점</span><output id="bGeneralScore">자동 계산</output><small id="bGeneralBreakdown"></small></div>
