@@ -1046,7 +1046,7 @@
   }
   // ===== 공고 위치 지도 (카카오맵) =====
   // JS 키는 카카오 개발자 콘솔에 등록한 도메인에서만 작동하는 공개용 키
-  const KAKAO_JS_KEY="49d5057f738353c651f39489488e7d7d";
+  const KAKAO_JS_KEY="e399ff20e8428712e7b97ac570460ec7";
   let kakaoReady=null,mapRenderedFor="";
   function loadKakao(){
     if(kakaoReady)return kakaoReady;
