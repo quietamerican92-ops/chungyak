@@ -804,3 +804,7 @@ label:has(.suffix) input{padding-right:42px}
 .quick-section-fold>summary i{white-space:nowrap;flex:none}
 .quick-section-fold>summary i[data-closed]::after{content:attr(data-closed)}
 .quick-section-fold[open]>summary i[data-open]::after{content:attr(data-open)}
+/* 프로필 칩 대비 강화: 카드 배경(#f7f9f6)과 구분되도록 채움색·테두리 진하게 */
+.qps-chips span{background:#e6ece7;border:1.5px solid #b4c4b8;color:#1f2d26}
+.qps-chips.money span{background:#cfe9d5;border-color:#7fb68d;color:#0b4a31}
+.qps-chips span.empty{background:#fff;border:1.5px dashed #b4c4b8;color:var(--muted)}
