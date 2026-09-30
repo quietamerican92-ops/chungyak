@@ -987,9 +987,17 @@
   function renderQuickProfileSnapshot(){
     const el=$("quickProfileSnapshot");if(!el)return;
     const state=quickProfileState(),children=num($("quickChildren").value),fetuses=num($("quickFetuses").value);
-    const income=num($("quickIncomeA").value)+(state.married?num($("quickIncomeB").value):0),cash=num($("quickCash").value),saving=num($("quickSaving").value);
-    const chips=[state.labels[state.family]||"가구",`${children}자녀${fetuses?` + 태아 ${fetuses}`:""}`,$("quickRegion").value||"거주지 미입력",income?`월소득 ${formatWonShort(income)}`:"소득 미입력",cash?`현금 ${formatWonShort(cash)}`:"현금 미입력",saving?`월저축 ${formatWonShort(saving)}`:"월저축 미입력"];
-    el.innerHTML=`<div class="quick-profile-bar"><div><span class="saved-profile-badge">저장된 프로필</span><div class="quick-profile-chips">${chips.map((chip,i)=>`<span class="${i>2&&!/미입력/.test(chip)?"money":""}${/미입력/.test(chip)?" missing":""}">${esc(chip)}</span>`).join("")}</div>${state.missing.length?`<small class="quick-profile-missing">추천 계산 전 입력 필요 · ${esc(state.missing.join(" · "))}</small>`:"<small>입력값을 기준으로 아래 신청안을 자동 갱신합니다.</small>"}</div><div class="quick-profile-actions"><button type="button" class="ghost" data-edit-profile>프로필 수정</button>${state.essentialComplete?`<button type="button" class="primary" data-refresh-plan>다시 계산</button>`:""}</div></div>`;
+    const income=num($("quickIncomeA").value)+(state.married?num($("quickIncomeB").value):0);
+    const cash=num($("quickCash").value),saving=num($("quickSaving").value),asset=num($("quickAsset").value);
+    const region=String($("quickRegion").value||"").trim().replace(/(특별자치시|특별자치도|특별시|광역시)$/,"").replace(/도$/,"");
+    const residence=R.normalizeDate($("quickResidence").value);
+    const years=residence?Math.floor(R.yearsBetween(residence,todayStr())):null;
+    const familyLabel={single:"1인 가구",married:"부부",single_parent:"한부모"}[state.family]||"가구";
+    const family=[familyLabel,children||fetuses?`자녀 ${children}${fetuses?` · 태아 ${fetuses}`:""}`:"자녀 없음",region?`${region}${years!==null?` ${years}년 거주`:""}`:"",$("quickNoHome").checked?"무주택":"유주택"].filter(Boolean);
+    const money=[income?`월소득 ${formatWonShort(income)}`:"",cash?`현금 ${formatWonShort(cash)}`:"",saving?`월저축 ${formatWonShort(saving)}`:"",asset?`자산 ${formatWonShort(asset)}`:""].filter(Boolean);
+    const missing=[...state.missing,...(income?[]:["소득"]),...(cash?[]:["현금"]),...(saving?[]:["월저축"])];
+    const chips=list=>list.map(text=>`<span>${esc(text)}</span>`).join("");
+    el.innerHTML=`<div class="qps-row"><em>가족</em><div class="qps-chips">${chips(family)}</div></div><div class="qps-row"><em>자금</em><div class="qps-chips money">${money.length?chips(money):`<span class="empty">아직 입력 안 함</span>`}</div></div>${missing.length?`<small class="qps-missing">입력 필요 · ${esc(missing.join(" · "))}</small>`:""}`;
   }
   let lastChipNoticeId=null;
   function updateNoticeChip(){
@@ -1163,7 +1171,7 @@
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);
     localStorage.setItem(UI_MODE_KEY,simple?"simple":"advanced");
-    if(simple){initQuickFromDetail();renderQuickProfileSnapshot();setPanel("quick");const complete=quickProfileState().essentialComplete;$("quickInputsFold").open=!complete;if(complete){syncQuickToDetail();calculate();renderQuickResult()}}
+    if(simple){initQuickFromDetail();renderQuickProfileSnapshot();setPanel("quick");const complete=quickProfileState().essentialComplete;$("quickInputsFold").open=!complete;$("quickPlanFold").open=true;if(complete){syncQuickToDetail();calculate();renderQuickResult()}}
     else setPanel(panel||"profile");
   }
   function quickFundingCheck(sizeName){
@@ -1315,6 +1323,7 @@
       ?(regulated?"규제지역 · 부부 합산 3장 (특공 2·일반 1, 일반 1순위는 세대주만)":"부부 합산 4장 (각자 특공+일반)")
       :(regulated?"규제지역 · 일반 1순위는 세대주만":"특공+일반 최대 2장");
     const verifiedNote=notice.verified?"":`<span class="quick-hero-warn">⚠ 검수 전 · 원문 대조 권장</span>`;
+    if($("quickPlanSub"))$("quickPlanSub").textContent=`${notice.projectName||"공고"} · ${fundingSummary}`;
     $("quickResult").innerHTML=`<article class="portfolio-hero"><div class="portfolio-top"><div><div class="quick-hero-top"><span class="kicker">FAMILY APPLICATION PLAN</span>${verifiedNote}</div><h3>${esc(notice.projectName||"공고")}</h3><p>${esc(cardText)}</p></div><div class="portfolio-verdict"><small>자금 판정</small><b class="${maxGap?"bad":"ok"}">${esc(fundingSummary)}</b></div></div>${quickProbabilitySummary(picks)}<div class="portfolio-apps">${pickLines}</div><div class="quick-result-actions"><button type="button" class="ghost" data-quick-go="strategy">근거·전체 후보</button><button type="button" class="ghost" data-quick-go="finance">자금 상세</button><button type="button" class="ghost" data-quick-go="notice">다른 공고</button></div></article>`;
   }
   // ── 인근 실거래 시세 (국토교통부 실거래가 API, CORS 허용)
@@ -2160,11 +2169,7 @@
   updateQuickLoanFoldInfo();
   ["quickNoHome","quickNeverHome","quickHead"].forEach(id=>$(id)?.addEventListener("change",quickLiveSync));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",quickLiveSync));
-  $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickProfileSnapshot();renderQuickResult();$("quickInputsFold").open=false;$("quickResult").scrollIntoView({behavior:"smooth",block:"start"})});
-  $("quickProfileSnapshot").addEventListener("click",event=>{
-    if(event.target.closest("[data-edit-profile]")){const fold=$("quickInputsFold");fold.open=true;fold.scrollIntoView({behavior:"smooth",block:"start"});return}
-    if(event.target.closest("[data-refresh-plan]")){syncQuickToDetail();calculate();renderQuickResult()}
-  });
+  $("quickCalculate").addEventListener("click",()=>{syncQuickToDetail();calculate();renderQuickProfileSnapshot();renderQuickResult();$("quickInputsFold").open=false;$("quickPlanFold").open=true;$("quickPlanFold").scrollIntoView({behavior:"smooth",block:"start"})});
   $("quickSupplyTable").addEventListener("click",event=>{const button=event.target.closest("[data-price-size]");if(button)showPriceDialog(button.dataset.priceSize)});
   $("quickResult").addEventListener("click",event=>{
     if(event.target.closest("[data-load-actual]")){setUiMode(false,"strategy");document.querySelector(".applyhome-panel").open=true;$("applyhomeKey").focus();return}

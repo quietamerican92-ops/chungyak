@@ -788,3 +788,19 @@ label:has(.suffix) input{padding-right:42px}
 .nm-near p{margin:0}
 .nm-near small{font-size:10.5px}
 .nm-pin{background:#fff;border:1.5px solid #2b6cb0;color:#1d3f73;border-radius:99px;padding:2px 7px;font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+
+/* 메인 흐름: 공고 → 가족·자금 → 청약 접수 플랜 */
+.quick-section-fold>summary .quick-profile-snapshot{margin:7px 0 0;display:grid;gap:5px}
+.qps-row{display:flex;align-items:flex-start;gap:8px}
+.qps-row em{flex:0 0 28px;font-style:normal;font-size:10px;font-weight:900;color:var(--muted);padding-top:4px}
+.qps-chips{display:flex;flex-wrap:wrap;gap:5px}
+.qps-chips span{border:1px solid #dce5dc;border-radius:99px;padding:3px 9px;background:#fff;color:#344039;font-size:11px;font-weight:800}
+.qps-chips.money span{color:#124f38;background:#edf7ef;border-color:#cfe6d4}
+.qps-chips span.empty{color:var(--muted);background:transparent;border-style:dashed}
+.qps-missing{color:#9a5a19!important;font-size:10.5px!important;font-weight:800!important}
+.quick-plan-fold>.quick-result-first{padding:12px}
+.quick-plan-fold>.quick-result-first:empty::before{content:"가족·소득·자금 정보를 입력하고 '추천 조합 계산하기'를 누르면 여기에 신청안이 나옵니다.";display:block;padding:6px 4px;font-size:12px;color:var(--muted);font-weight:700}
+@media(max-width:720px){.quick-plan-fold>.quick-result-first{padding:8px}}
+.quick-section-fold>summary i{white-space:nowrap;flex:none}
+.quick-section-fold>summary i[data-closed]::after{content:attr(data-closed)}
+.quick-section-fold[open]>summary i[data-open]::after{content:attr(data-open)}

@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20260930-map2">
+  <link rel="stylesheet" href="./styles.css?v=20260930-flow2">
 </head>
 <body>
   <header class="hero">
@@ -52,11 +52,8 @@
         <div id="noticeMap" class="notice-map is-hidden"></div>
       </article>
 
-      <div id="quickProfileSnapshot" class="quick-profile-snapshot"></div>
-      <div id="quickResult" class="quick-result-first"></div>
-
       <details id="quickEvidenceFold" class="quick-section-fold">
-        <summary><span><b>공고 물량·분양가·인근 시세</b><small>추천 근거 원문을 확인할 때 펼치세요</small></span><i>펼치기</i></summary>
+        <summary><span><b>공고 물량·분양가·인근 시세</b><small>추천 근거 원문을 확인할 때 펼치세요</small></span><i data-closed="펼치기" data-open="접기"></i></summary>
         <article class="card quick-card">
           <h3>타입별·유형별 물량</h3>
           <div id="quickSupplyTable" class="table-wrap"></div>
@@ -72,8 +69,8 @@
         </article>
       </details>
 
-      <details id="quickInputsFold" class="quick-section-fold quick-inputs-fold" open>
-        <summary><span><b>가족·소득·자금 정보</b><small>저장된 값 확인 및 수정</small></span><i>수정하기</i></summary>
+      <details id="quickInputsFold" class="quick-section-fold quick-inputs-fold">
+        <summary><span><b>가족·소득·자금 정보</b><div id="quickProfileSnapshot" class="quick-profile-snapshot"></div></span><i data-closed="수정" data-open="접기"></i></summary>
       <article class="card quick-card">
         <h3><span class="quick-step">2</span> 나와 가족</h3>
         <div class="quick-options">
@@ -132,6 +129,11 @@
       </article>
 
       <button id="quickCalculate" class="primary quick-cta" type="button">추천 조합 계산하기</button>
+      </details>
+
+      <details id="quickPlanFold" class="quick-section-fold quick-plan-fold" open>
+        <summary><span><b>청약 접수 플랜</b><small id="quickPlanSub">신청 조합 · 당첨 가능성 · 자금 판정</small></span><i data-closed="펼치기" data-open="접기"></i></summary>
+        <div id="quickResult" class="quick-result-first"></div>
       </details>
       <p class="hint quick-notice-hint">기본 화면은 예치금 충족·재당첨 제한 없음 등 일반적인 상황을 가정합니다. 상세 자격과 공고 숫자는 공고·계산 검수에서 확인하세요.</p>
     </section>
@@ -583,10 +585,10 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20260930-map2"></script>
-  <script src="./notice-dedupe.js?v=20260930-map2"></script>
-  <script src="./model-data.js?v=20260930-map2"></script>
-  <script src="./lawd-map.js?v=20260930-map2"></script>
-  <script src="./app.js?v=20260930-map2"></script>
+  <script src="./rules.js?v=20260930-flow2"></script>
+  <script src="./notice-dedupe.js?v=20260930-flow2"></script>
+  <script src="./model-data.js?v=20260930-flow2"></script>
+  <script src="./lawd-map.js?v=20260930-flow2"></script>
+  <script src="./app.js?v=20260930-flow2"></script>
 </body>
 </html>
