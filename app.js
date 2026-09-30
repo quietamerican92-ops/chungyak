@@ -1042,6 +1042,81 @@
     const publicChip=notice.housingType==="public"?`<p class="qn-public-chip">🏛 공공분양(국민주택) — 일반공급은 가점이 아니라 <b>저축총액·납입횟수 순</b>으로 뽑습니다. 프로필에 납입인정총액을 입력하세요.</p>`:"";
     el.innerHTML=priceTable||timeline?`${publicChip}<div class="qn-flex">${priceTable}${timeline}</div>${minNote}`:`${publicChip}<p class="muted">공고를 불러오면 평형별 가격과 납부 일정이 여기에 표시됩니다.</p>`;
     renderQuickSupplyTable();
+    renderNoticeMap();
+  }
+  // ===== 공고 위치 지도 (카카오맵) =====
+  // JS 키는 카카오 개발자 콘솔에 등록한 도메인에서만 작동하는 공개용 키
+  const KAKAO_JS_KEY="49d5057f738353c651f39489488e7d7d";
+  let kakaoReady=null,mapRenderedFor="";
+  function loadKakao(){
+    if(kakaoReady)return kakaoReady;
+    kakaoReady=new Promise((resolve,reject)=>{
+      if(window.kakao?.maps?.services){resolve(window.kakao);return}
+      const script=document.createElement("script");
+      script.src=`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&autoload=false&libraries=services`;
+      script.onload=()=>{try{window.kakao.maps.load(()=>resolve(window.kakao))}catch(error){reject(error)}};
+      script.onerror=()=>reject(new Error("SDK 로드 실패"));
+      document.head.appendChild(script);
+    });
+    kakaoReady.catch(()=>{kakaoReady=null});
+    return kakaoReady;
+  }
+  // "홍은동 355번지 일원", "○○동 12 외 3필지" 같은 공고 표기를 지오코딩 가능한 주소로 정리
+  function cleanAddress(value){
+    return String(value||"").replace(/\([^)]*\)/g," ").replace(/번지.*$/,"").replace(/\s*(일원|일대|외\s*\d+\s*필지).*$/,"").replace(/\s+/g," ").trim();
+  }
+  function geocodeNotice(kakao,address,name){
+    const services=kakao.maps.services,OK=services.Status.OK;
+    const geocoder=new services.Geocoder(),places=new services.Places();
+    const byAddress=(query,how)=>new Promise(res=>query?geocoder.addressSearch(query,(result,status)=>res(status===OK&&result[0]?{lat:+result[0].y,lng:+result[0].x,how}:null)):res(null));
+    const byKeyword=(query,how)=>new Promise(res=>query?places.keywordSearch(query,(result,status)=>res(status===OK&&result[0]?{lat:+result[0].y,lng:+result[0].x,how}:null)):res(null));
+    const shortName=String(name||"").replace(/\([^)]*\)/g," ").replace(/입주자\s*모집.*$/,"").replace(/\s+/g," ").trim();
+    const areaOnly=address.replace(/\s+\S*(?:블록|BL|지구)\S*.*$/i,"").trim();
+    return byAddress(address,"주소")
+      .then(hit=>hit||byKeyword(shortName,"단지명 검색"))
+      .then(hit=>hit||(areaOnly&&areaOnly!==address?byAddress(areaOnly,"동 단위 대략 위치"):null));
+  }
+  function nearbyPlaces(kakao,pos,code,radius){
+    const services=kakao.maps.services;
+    return new Promise(res=>new services.Places().categorySearch(code,(result,status)=>res(status===services.Status.OK?result:[]),{location:new kakao.maps.LatLng(pos.lat,pos.lng),radius,sort:services.SortBy.DISTANCE}));
+  }
+  async function renderNoticeMap(){
+    const box=$("noticeMap");if(!box)return;
+    const address=String(notice.location||"").trim();
+    if(!address){box.classList.add("is-hidden");box.innerHTML="";mapRenderedFor="";return}
+    const key=`${notice.id}|${address}`;
+    if(mapRenderedFor===key)return;
+    mapRenderedFor=key;
+    const query=cleanAddress(address)||address;
+    box.classList.remove("is-hidden");
+    box.innerHTML=`<div class="nm-head"><div><b>📍 위치</b><small>${esc(address)}</small></div><a class="nm-open" href="https://map.kakao.com/link/search/${encodeURIComponent(query)}" target="_blank" rel="noopener">카카오맵 열기 ↗</a></div><div class="nm-canvas" id="noticeMapCanvas"><p class="muted">지도를 불러오는 중…</p></div><div class="nm-near" id="noticeMapNear"></div>`;
+    const canvas=$("noticeMapCanvas");
+    try{
+      const kakao=await loadKakao();
+      if(mapRenderedFor!==key)return;
+      const pos=await geocodeNotice(kakao,query,notice.projectName);
+      if(mapRenderedFor!==key)return;
+      if(!pos){canvas.innerHTML=`<p class="muted">주소를 좌표로 찾지 못했습니다(택지지구 블록 주소 등). 위 '카카오맵 열기'로 확인하세요.</p>`;return}
+      canvas.innerHTML="";
+      const center=new kakao.maps.LatLng(pos.lat,pos.lng);
+      const map=new kakao.maps.Map(canvas,{center,level:5});
+      new kakao.maps.Marker({map,position:center});
+      // 간편/상세 전환 등으로 숨겨진 상태에서 그려지면 크기가 0이므로, 보이는 순간 다시 맞춘다
+      if(window.ResizeObserver)new ResizeObserver(()=>{map.relayout();map.setCenter(center)}).observe(canvas);
+      const [subways,schools]=await Promise.all([nearbyPlaces(kakao,pos,"SW8",1500),nearbyPlaces(kakao,pos,"SC4",1000)]);
+      if(mapRenderedFor!==key)return;
+      const walk=meters=>Math.max(1,Math.round(meters/67));
+      const seen=new Set(),stations=[];
+      subways.forEach(place=>{const base=place.place_name.split(" ")[0];if(!seen.has(base)&&stations.length<3){seen.add(base);stations.push(place)}});
+      stations.forEach(place=>new kakao.maps.CustomOverlay({map,position:new kakao.maps.LatLng(+place.y,+place.x),yAnchor:1.4,content:`<div class="nm-pin">🚇 ${esc(place.place_name.split(" ")[0])}</div>`}));
+      const elementary=schools.find(place=>/초등학교/.test(place.place_name));
+      const stationText=stations.length?stations.map(place=>`<b>${esc(place.place_name)}</b> ${Number(place.distance).toLocaleString("ko-KR")}m · 도보 약 ${walk(+place.distance)}분`).join("<br>"):"반경 1.5km 안에 지하철역 없음";
+      const schoolText=elementary?`<b>${esc(elementary.place_name)}</b> ${Number(elementary.distance).toLocaleString("ko-KR")}m · 도보 약 ${walk(+elementary.distance)}분`:"반경 1km 안에 초등학교 없음";
+      $("noticeMapNear").innerHTML=`<div><span>지하철</span><p>${stationText}</p></div><div><span>초등학교</span><p>${schoolText}</p></div><small class="muted">직선거리 기준 · 위치 찾은 방법: ${esc(pos.how)}${pos.how==="주소"?"":" (부지 위치와 다를 수 있음)"}</small>`;
+    }catch(error){
+      canvas.innerHTML=`<p class="muted">지도를 불러오지 못했습니다. 카카오 개발자 콘솔의 JavaScript 키에 이 사이트 도메인이 등록됐는지, 카카오맵 사용 설정이 켜져 있는지 확인하세요. 위 '카카오맵 열기'는 그대로 쓸 수 있습니다.</p>`;
+      mapRenderedFor="";
+    }
   }
   function showPriceDialog(sizeName){
     normalizeNoticeFinance(notice);
