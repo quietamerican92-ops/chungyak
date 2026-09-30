@@ -283,3 +283,25 @@ assert.ok(/공공 특공/.test(eligPublic.multi.reason)); // 특공에 자산기
 const eligPrivate=R.eligibility("a",publicProfile,{...publicNotice,housingType:"private"});
 assert.ok(/민영주택 1순위/.test(eligPrivate.general.reason));
 console.log("rules.test.js: public-housing sequence rules passed");
+
+// ===== 공공분양 일반공급 결과 판정(순위순차제) =====
+// 컷 미입력 → 확률 날조 금지, 참고치만
+const pgNoCut=R.publicGeneralOutcome({supply:10,applicantsLocal:400,applicantsTotal:400,closedInLocal:true,sequence:1,savings:8000000,count:80,smallArea:false});
+assert.strictEqual(pgNoCut.probability,null);
+assert.strictEqual(pgNoCut.confidence,"BENCHMARK_ONLY");
+assert.ok(Math.abs(pgNoCut.benchmark-10/400)<1e-9);
+assert.ok(/순위순차제/.test(pgNoCut.warnings[0]));
+// 저축총액 컷 입력 → 충족/미달 판정 (cut 단위: 만원)
+const pgWin=R.publicGeneralOutcome({supply:10,applicantsLocal:400,sequence:1,savings:25000000,smallArea:false,cut:2400});
+assert.strictEqual(pgWin.probability,1);
+assert.strictEqual(pgWin.confidence,"ESTIMATE");
+const pgLose=R.publicGeneralOutcome({supply:10,applicantsLocal:400,sequence:1,savings:8000000,smallArea:false,cut:2400});
+assert.strictEqual(pgLose.probability,0);
+// 순차 2면 컷을 넘겨도 순차 1 마감 시 기회 없음
+assert.strictEqual(R.publicGeneralOutcome({supply:10,applicantsLocal:400,sequence:2,savings:30000000,smallArea:false,cut:2400}).probability,0);
+// 40㎡ 이하는 납입 횟수 기준
+assert.strictEqual(R.publicGeneralOutcome({supply:5,applicantsLocal:200,sequence:1,count:80,smallArea:true,cut:60}).probability,1);
+assert.strictEqual(R.publicGeneralOutcome({supply:5,applicantsLocal:200,sequence:1,count:50,smallArea:true,cut:60}).probability,0);
+// 저축총액 미입력 상태에서 컷만 있으면 계산 불가로 처리
+assert.strictEqual(R.publicGeneralOutcome({supply:10,applicantsLocal:400,sequence:1,savings:0,smallArea:false,cut:2400}).confidence,"NOT_CALCULABLE");
+console.log("rules.test.js: public general outcome passed");

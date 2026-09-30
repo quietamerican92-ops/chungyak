@@ -908,6 +908,38 @@
       basis:smallArea?"전용 40㎡ 이하 → 납입 횟수 많은 순":"전용 40㎡ 초과 → 저축총액(월 최대 25만원 인정) 많은 순",warnings};
   }
 
+  // 국민주택 일반공급 결과 판정: 순위순차제는 추첨이 아니므로 경쟁자 분포 없이 확률을 만들지 않는다
+  // cut = 사용자가 입력한 커트라인(40㎡ 초과는 저축총액 만원, 40㎡ 이하는 납입 횟수)
+  function publicGeneralOutcome(input){
+    const supply=integer(input.supply);
+    const region=effectivePool({...input,supply});
+    const smallArea=Boolean(input.smallArea);
+    const sequence=integer(input.sequence)||2;
+    const savings=won(input.savings),count=integer(input.count),cut=Number(input.cut)||0;
+    const base={supply,pool:region.pool,sequence,savings,count,smallArea,cut};
+    if(!supply||region.pool<=0)return {...base,probability:null,confidence:"NOT_CALCULABLE",assumptions:[],warnings:["공급세대 또는 신청자 수가 없어 계산 불가"]};
+    const assumptions=[smallArea?"전용 40㎡ 이하 → 납입 횟수 많은 순":"전용 40㎡ 초과 → 저축총액(월 최대 25만원 인정) 많은 순",
+      region.closed?"해당지역 마감 → 해당지역 신청자만 경쟁":"기타지역 포함 경쟁"];
+    if(cut>0){
+      const mine=smallArea?count:savings;
+      const need=smallArea?cut:cut*10000;
+      const has=mine>0;
+      if(!has)return {...base,probability:null,confidence:"NOT_CALCULABLE",assumptions,
+        warnings:[smallArea?"납입 회차를 입력해야 컷 충족 여부를 판정할 수 있습니다":"납입인정총액을 입력해야 컷 충족 여부를 판정할 수 있습니다"]};
+      return {...base,probability:sequence===1&&mine>=need?1:0,confidence:"ESTIMATE",
+        assumptions:[...assumptions,
+          smallArea?`입력한 납입 횟수 컷 ${cut}회 기준`:`입력한 저축총액 컷 ${cut.toLocaleString("ko-KR")}만원 기준`,
+          sequence===1?"무주택 3년 이상 → 순차 1 참여":"무주택 3년 미만 → 순차 2(순차 1에서 마감되면 기회 없음)"],
+        warnings:["컷은 사용자가 입력한 가정값이며 실제 커트라인은 공고·회차마다 다릅니다"]};
+    }
+    const benchmark=clamp01(supply/region.pool);
+    return {...base,probability:null,benchmark,confidence:"BENCHMARK_ONLY",
+      qualitativeLabel:benchmark>=.5?"유력":benchmark>=.25?"가능":benchmark>=.1?"경계":benchmark>=.03?"낮음":"매우낮음",
+      assumptions,
+      warnings:["국민주택 일반공급은 순위순차제 — 경쟁자의 저축총액·납입횟수 분포 없이 정확한 확률 계산 불가",
+        smallArea?"예상 커트라인 칸에 납입 횟수 컷을 넣으면 충족 여부를 판정합니다":"예상 커트라인 칸에 저축총액 컷(만원)을 넣으면 충족 여부를 판정합니다"]};
+  }
+
   function eligibility(personKey,profile,notice){
     const p=profile.people[personKey];
     const type=profileType(profile);
@@ -1060,7 +1092,7 @@
     return clamp01(1-(list||[]).reduce((product,p)=>product*(1-clamp01(p||0)),1));
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,noHomePeriodStart,publicGeneralStatus,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,noHomePeriodStart,publicGeneralStatus,publicGeneralOutcome,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);
