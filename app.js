@@ -1019,8 +1019,8 @@
       :notice.announceDate?`발표 ${fmt(notice.announceDate)}`:notice.noticeDate?`공고 ${R.normalizeDate(notice.noticeDate).replace(/-/g,".")}`:"";
     $("quickHeadKicker").textContent=[area,kind,status].filter(Boolean).join(" · ")||"선택한 공고";
     title.textContent=notice.projectName||"공고를 선택하세요";
-    $("quickHeadMeta").textContent=String(notice.location||"").trim();
-    if(changed){const head=$("quickHead");head.classList.remove("notice-flash");void head.offsetWidth;head.classList.add("notice-flash")}
+    $("quickHeadMeta").textContent=displayAddress(notice.location);
+    if(changed){const head=$("quickNoticeHead");head.classList.remove("notice-flash");void head.offsetWidth;head.classList.add("notice-flash")}
   }
   function noticePblancUrl(){
     if(notice.pblancUrl)return notice.pblancUrl;
@@ -1087,6 +1087,9 @@
     return kakaoReady;
   }
   // "홍은동 355번지 일원", "○○동 12 외 3필지" 같은 공고 표기를 지오코딩 가능한 주소로 정리
+  function displayAddress(value){
+    return String(value||"").trim().replace(/\s*(일원|일대)\s*$/,"");
+  }
   function cleanAddress(value){
     return String(value||"").replace(/\([^)]*\)/g," ").replace(/번지.*$/,"").replace(/\s*(일원|일대|외\s*\d+\s*필지).*$/,"").replace(/\s+/g," ").trim();
   }
@@ -1114,7 +1117,7 @@
     mapRenderedFor=key;
     const query=cleanAddress(address)||address;
     box.classList.remove("is-hidden");
-    box.innerHTML=`<div class="nm-head"><div><b>📍 위치</b><small>${esc(address)}</small></div><a class="nm-open" href="https://map.kakao.com/link/search/${encodeURIComponent(query)}" target="_blank" rel="noopener">카카오맵 열기 ↗</a></div><div class="nm-canvas" id="noticeMapCanvas"><p class="muted">지도를 불러오는 중…</p></div><div class="nm-near" id="noticeMapNear"></div>`;
+    box.innerHTML=`<div class="nm-head"><div><b>📍 위치</b><small>${esc(displayAddress(address))}</small></div><a class="nm-open" href="https://map.kakao.com/link/search/${encodeURIComponent(query)}" target="_blank" rel="noopener">카카오맵 열기 ↗</a></div><div class="nm-canvas" id="noticeMapCanvas"><p class="muted">지도를 불러오는 중…</p></div><div class="nm-near" id="noticeMapNear"></div>`;
     const canvas=$("noticeMapCanvas");
     try{
       const kakao=await loadKakao();

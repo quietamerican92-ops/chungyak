@@ -813,3 +813,10 @@ label:has(.suffix) input{padding-right:42px}
 .quick-head p{word-break:keep-all}
 @keyframes noticeFlash{0%{background:#e6f7a6}100%{background:transparent}}
 .quick-head.notice-flash h2{animation:noticeFlash 1.8s ease-out}
+/* 공고 헤더: 버튼은 윗줄 오른쪽, 제목·주소는 전체 폭 */
+.quick-head#quickNoticeHead{display:block}
+.qh-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.qh-top .kicker{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qh-top button{flex:none;padding:7px 11px;font-size:12px}
+#quickNoticeHead h2{margin:6px 0 3px}
+#quickHeadMeta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
