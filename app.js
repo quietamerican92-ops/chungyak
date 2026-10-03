@@ -1197,6 +1197,11 @@
     const el=$("quickSupplyTable");
     if(!el)return;
     if(!Array.isArray(notice.sizes)||!notice.sizes.length){el.innerHTML=`<p class="muted">공고를 불러오면 주택형별 특공·일반 물량이 표시됩니다.</p>`;return}
+    const check=notice.supplyCheck;
+    const checkBadge=!check?(notice.sourceFile==="청약홈 API 자동 구성"?`<p class="qs-check ok">✓ 청약홈 주택형별 물량 그대로</p>`:`<p class="qs-check none">청약홈 대조 전 · PDF에서 읽은 물량</p>`)
+      :check.status==="ok"?`<p class="qs-check ok">✓ 청약홈과 주택형·세대수 일치 (${esc(check.house)})</p>`
+      :check.status==="fixed"?`<details class="qs-check fixed"><summary>⚠ PDF와 달라 청약홈 값으로 ${check.diffs.length}건 수정</summary>${check.diffs.map(item=>`<div>${esc(item)}</div>`).join("")}</details>`
+      :`<p class="qs-check none">청약홈에 아직 물량 정보 없음 · PDF 값 사용</p>`;
     const stageCell=value=>{
       const count=num(value);
       if(!count)return "-";
@@ -1215,7 +1220,7 @@
       mobile.push(`<details class="qs-size-card"><summary><span><b>${esc(size.name)}</b><small>${price?.max?`최고 ${formatWonShort(price.max)}`:"가격 미확인"}</small></span><span><b>${num(size.total)}세대</b><small>특공 ${special} · 일반 ${num(size.general)}</small></span></summary><div class="qs-size-body"><button type="button" class="qs-mobile-price" data-price-size="${esc(size.name)}">층별 분양가 보기 →</button><div class="qs-mobile-grid"><span>기관추천 <b>${num(size.agency)||"-"}</b></span><span>다자녀 <b>${num(size.multi)||"-"}</b></span><span>신혼 <b>${stages(size.newly)}</b></span><span>노부모 <b>${num(size.elder)||"-"}</b></span><span>생애최초 <b>${stages(size.first)}</b></span><span>신생아 <b>${stages(size.baby)}</b></span><span class="qs-mobile-total">일반 가점 <b>${alloc.point||"-"}</b></span><span class="qs-mobile-total">일반 추첨 <b>${alloc.lottery||"-"}</b></span></div></div></details>`);
       return `<tr><td><button type="button" class="qs-type-btn" data-price-size="${esc(size.name)}"><b>${esc(size.name)}</b><small>가격 ▸</small></button></td><td>${num(size.agency)||"-"}</td><td>${num(size.multi)||"-"}</td><td>${stageCell(size.newly)}</td><td>${num(size.elder)||"-"}</td><td>${stageCell(size.first)}</td><td>${stageCell(size.baby)}</td><td class="qs-sum">${special||"-"}</td><td>${alloc.point||"-"}</td><td>${alloc.lottery||"-"}</td><td class="qs-sum">${num(size.total)}</td></tr>`;
     }).join("");
-    el.innerHTML=`<div class="qs-desktop-table"><table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table></div><div class="qs-mobile-cards">${mobile.join("")}</div><p class="hint qs-hint">신혼·생애최초·신생아의 단계 숫자는 우선·일반·추첨 물량이며 미달 시 다음 단계로 이월됩니다. 일반 가점·추첨은 공고의 면적별 비율과 법정 올림 원칙을 적용했습니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
+    el.innerHTML=checkBadge+`<div class="qs-desktop-table"><table class="qs-table"><thead><tr><th rowspan="2">주택형</th><th colspan="7">특별공급</th><th colspan="2">일반공급</th><th rowspan="2">총</th></tr><tr><th>기관</th><th>다자녀</th><th>신혼</th><th>노부모</th><th>생애최초</th><th>신생아</th><th>계</th><th>가점</th><th>추첨</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>합계</td><td>${totals.agency||"-"}</td><td>${totals.multi||"-"}</td><td>${totals.newly||"-"}</td><td>${totals.elder||"-"}</td><td>${totals.first||"-"}</td><td>${totals.baby||"-"}</td><td>${totals.special||"-"}</td><td>${totals.point||"-"}</td><td>${totals.lottery||"-"}</td><td>${totals.total}</td></tr></tfoot></table></div><div class="qs-mobile-cards">${mobile.join("")}</div><p class="hint qs-hint">신혼·생애최초·신생아의 단계 숫자는 우선·일반·추첨 물량이며 미달 시 다음 단계로 이월됩니다. 일반 가점·추첨은 공고의 면적별 비율과 법정 올림 원칙을 적용했습니다.${notice.remainder?" 무순위 공고는 전량 추첨입니다.":""}</p>`;
   }
   function setUiMode(simple,panel){
     document.body.classList.toggle("simple-mode",simple);
@@ -1865,6 +1870,55 @@
     const notifyState=!("Notification"in window)?"":Notification.permission==="granted"?`<small class="notify-on">🔔 새 공고 알림 켜짐 — 앱을 열 때 지난 방문 이후 올라온 공고를 알려드립니다</small>`:`<button type="button" id="notifyEnable">🔔 새 공고 알림 켜기</button>`;
     $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><div class="live-foot-row"><button type="button" id="liveRefresh">목록 지금 새로고침</button>${notifyState}</div><small>공공데이터 API는 청약홈 사이트 게시보다 최대 하루가량 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
   }
+  function apiTypeName(raw){const match=String(raw).trim().match(/^0*(\d+)\.\d+\s*([A-Z]*)$/);return match?String(Number(match[1]))+(match[2]||""):String(raw).trim()}
+  function apiSizeFromMdl(m){
+    const general=num(m.SUPLY_HSHLDCO),special=num(m.SPSPLY_HSHLDCO);
+    return {name:apiTypeName(m.HOUSE_TY),area:parseFloat(String(m.HOUSE_TY).trim())||num(m.SUPLY_AR)||0,total:general+special,agency:num(m.INSTT_RECOMEND_HSHLDCO),multi:num(m.MNYCH_HSHLDCO),newly:num(m.NWWDS_HSHLDCO),elder:num(m.OLD_PARNTS_SUPORT_HSHLDCO),first:num(m.LFE_FRST_HSHLDCO),baby:num(m.NWBB_HSHLDCO),general};
+  }
+  // PDF로 읽은 주택형·세대수를 청약홈 주택형별 물량(정답)과 대조 — 다르면 청약홈 값을 채택하고 무엇을 고쳤는지 남긴다
+  // 분양가·납부일정·층별 가격은 청약홈에 없으므로 PDF 값을 유지 (PDF가 못 읽은 주택형만 청약홈 최고가로 채움)
+  async function verifySupplyWithApplyhome(target){
+    const house=String(target.houseManageNo||"").trim();
+    const key=applyhomeKey();
+    if(!/^20\d{8}$/.test(house)){target.supplyCheck=null;return {status:"skip",message:"관리번호를 못 찾아 청약홈 물량 대조는 생략했습니다."}}
+    if(!key){target.supplyCheck=null;return {status:"skip",message:"청약홈 인증키가 없어 물량 대조는 생략했습니다."}}
+    const cond=`&cond%5BHOUSE_MANAGE_NO%3A%3AEQ%5D=${encodeURIComponent(house)}`;
+    const fetchMdl=op=>applyhomeGet(`${APPLYHOME_DETAIL_BASE}/${op}?page=1&perPage=100&serviceKey=${encodeURIComponent(key)}${cond}`).then(data=>data.data||[]).catch(()=>null);
+    let mdl=await fetchMdl("getAPTLttotPblancMdl");
+    if(mdl&&!mdl.length)mdl=await fetchMdl("getRemndrLttotPblancMdl");
+    if(mdl===null){target.supplyCheck=null;return {status:"skip",message:"청약홈 연결에 실패해 물량 대조를 못 했습니다(PDF 값 사용)."}}
+    if(!mdl.length){target.supplyCheck={house,at:todayStr(),status:"missing",diffs:[],notes:[]};return {status:"skip",message:`청약홈에 아직 이 공고(${house})의 주택형별 물량이 없어 PDF 값을 그대로 씁니다.`}}
+    const api=mdl.map(m=>({...apiSizeFromMdl(m),price:num(m.LTTOT_TOP_AMOUNT)*10000}));
+    const FIELDS=["total","agency","multi","newly","elder","first","baby","general"];
+    const LABEL={total:"총",agency:"기관",multi:"다자녀",newly:"신혼",elder:"노부모",first:"생애최초",baby:"신생아",general:"일반"};
+    const used=new Set(),diffs=[],notes=[],next=[];
+    target.pricing=target.pricing||[];
+    (target.sizes||[]).forEach(size=>{
+      let best=null;
+      api.forEach((row,i)=>{if(used.has(i))return;const gap=Math.abs(num(row.area)-num(size.area));if(gap<0.006&&(!best||gap<best.gap))best={i,gap}});
+      if(!best){const i=api.findIndex((row,j)=>!used.has(j)&&row.name===size.name);if(i>=0)best={i,gap:0}}
+      if(!best){diffs.push(`${size.name}: 청약홈에 없는 주택형이라 제외`);return}
+      used.add(best.i);
+      const row=api[best.i];
+      const changed=FIELDS.filter(field=>num(size[field])!==num(row[field]));
+      if(changed.length)diffs.push(`${size.name}: ${changed.map(field=>`${LABEL[field]} ${num(size[field])}→${num(row[field])}`).join(", ")}`);
+      next.push({...size,...Object.fromEntries(FIELDS.map(field=>[field,num(row[field])])),area:num(row.area)||num(size.area)});
+      const price=target.pricing.find(item=>item.size===size.name);
+      if(price&&num(price.max)&&row.price&&Math.abs(num(price.max)-row.price)>row.price*.005)notes.push(`${size.name}: 최고 분양가 PDF ${formatWonShort(price.max)} ↔ 청약홈 ${formatWonShort(row.price)} — 원문 확인`);
+      else if(row.price&&!(price&&num(price.max))){if(price)price.max=row.price;else target.pricing.push({size:size.name,min:0,max:row.price,options:[]})}
+    });
+    api.forEach((row,i)=>{
+      if(used.has(i))return;
+      diffs.push(`${row.name}: PDF에서 못 읽어 청약홈 값으로 추가`);
+      const {price,...size}=row;next.push(size);
+      if(price&&!target.pricing.some(item=>item.size===row.name))target.pricing.push({size:row.name,min:0,max:price,options:[]});
+    });
+    target.sizes=next;
+    target.pricing=target.pricing.filter(item=>next.some(size=>size.name===item.size));
+    target.supplyCheck={house,at:todayStr(),status:diffs.length?"fixed":"ok",diffs,notes};
+    const head=diffs.length?`청약홈 대조: 물량 ${diffs.length}건을 청약홈 값으로 수정했습니다 (${diffs.slice(0,2).join(" / ")}${diffs.length>2?" …":""}).`:"청약홈 대조: 주택형·세대수가 모두 일치합니다 ✓";
+    return {status:target.supplyCheck.status,message:head+(notes.length?` ${notes.join(" / ")}`:""),diffs,notes};
+  }
   async function applyRemoteNotice(house){
     const key=applyhomeKey();
     if(!key||!house)return;
@@ -1885,11 +1939,8 @@
         remainder=Boolean(detail&&mdl.length);
       }
       if(!detail||!mdl.length){toast("공고 상세를 불러오지 못했습니다. PDF 업로드를 이용해 주세요.");return}
-      const typeName=raw=>{const match=String(raw).trim().match(/^0*(\d+)\.\d+\s*([A-Z]*)$/);return match?String(Number(match[1]))+(match[2]||""):String(raw).trim()};
-      const sizes=mdl.map(m=>{
-        const general=num(m.SUPLY_HSHLDCO),special=num(m.SPSPLY_HSHLDCO);
-        return {name:typeName(m.HOUSE_TY),area:parseFloat(String(m.HOUSE_TY).trim())||num(m.SUPLY_AR)||0,total:general+special,agency:num(m.INSTT_RECOMEND_HSHLDCO),multi:num(m.MNYCH_HSHLDCO),newly:num(m.NWWDS_HSHLDCO),elder:num(m.OLD_PARNTS_SUPORT_HSHLDCO),first:num(m.LFE_FRST_HSHLDCO),baby:num(m.NWBB_HSHLDCO),general};
-      });
+      const typeName=apiTypeName;
+      const sizes=mdl.map(apiSizeFromMdl);
       const pricing=mdl.map(m=>({size:typeName(m.HOUSE_TY),min:0,max:num(m.LTTOT_TOP_AMOUNT)*10000,options:[]}));
       const contractDate=R.normalizeDate(applyhomeVal(detail,"CNTRCT_CNCLS_BGNDE"));
       const moveInRaw=String(applyhomeVal(detail,"MVN_PREARNGE_YM"));
@@ -2130,10 +2181,22 @@
       const extracted=await extractPdf(file,statusEl),parsed=parseAnnouncement(extracted.lines,file.name),matchedId=existingNoticeId(parsed),previous=matchedId?notices[matchedId]:null;
       notice=previous?{...clone(previous),...parsed,id:matchedId,houseManageNo:parsed.houseManageNo||previous.houseManageNo||"",announceDate:parsed.announceDate||previous.announceDate||"",expectations:clone(previous.expectations||{}),expectationsSource:previous.expectationsSource||""}:parsed;
       $("planPrice").value="";
+      statusEl.textContent="청약홈 주택형별 물량과 대조하는 중…";
+      const check=await verifySupplyWithApplyhome(notice);
+      // 물량이 청약홈 값으로 바뀌었으면, 바뀐 주택형 기준으로 가격표·납부일정을 다시 읽는다
+      if(check.status==="fixed"){
+        const reparsed=R.parsePaymentData(extracted.lines,notice.sizes);
+        if(reparsed.pricing.length){
+          const byName=new Map(reparsed.pricing.map(row=>[row.size,row]));
+          notice.pricing=notice.sizes.map(size=>byName.get(size.name)||notice.pricing.find(row=>row.size===size.name)).filter(Boolean);
+          if(reparsed.payments.length)notice.payments=reparsed.payments;
+          notice.paymentConfidence=reparsed.confidence;
+        }
+      }
       renderNotice();
-      const message=notice.sizes.length
-        ?`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개 감지. 모든 숫자를 원문과 대조해 주세요.`
-        :`${extracted.pages}쪽을 읽었지만 공급표를 찾지 못했습니다. 표가 이미지이거나 주택형이 가로로 나열된 특수 양식일 수 있습니다. 상세 모드에서 평형·물량을 직접 입력해 주세요.`;
+      const message=(notice.sizes.length
+        ?`${extracted.pages}쪽 분석 완료 · 주택형 ${notice.sizes.length}개 · 분양가 ${notice.pricing.filter(row=>num(row.max)>0).length}개 · 납부회차 ${notice.payments.length}개 · 발코니·옵션 ${notice.options.length}개.`
+        :`${extracted.pages}쪽을 읽었지만 공급표를 찾지 못했습니다. 표가 이미지이거나 특수 양식일 수 있습니다. 상세 모드에서 평형·물량을 직접 입력해 주세요.`)+" "+check.message;
       $("parseStatus").textContent=message;
       $("quickParseStatus").textContent=message;
       initQuickFromDetail();

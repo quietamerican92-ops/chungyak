@@ -820,3 +820,10 @@ label:has(.suffix) input{padding-right:42px}
 .qh-top button{flex:none;padding:7px 11px;font-size:12px}
 #quickNoticeHead h2{margin:6px 0 3px}
 #quickHeadMeta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 청약홈 물량 대조 결과 */
+.qs-check{margin:0 0 8px;font-size:11.5px;font-weight:800;border-radius:9px;padding:6px 10px}
+.qs-check.ok{background:#e7f5e4;color:#1d6b2f;border:1px solid #bfe0b8}
+.qs-check.none{background:#f3f4f2;color:var(--muted);border:1px dashed #cfd6cf}
+.qs-check.fixed{background:#fff5dc;color:#7a5a00;border:1px solid #ecd9a0}
+.qs-check.fixed summary{cursor:pointer}
+.qs-check.fixed div{font-weight:700;margin-top:4px;font-size:11px}
