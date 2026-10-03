@@ -808,3 +808,8 @@ label:has(.suffix) input{padding-right:42px}
 .qps-chips span{background:#e6ece7;border:1.5px solid #b4c4b8;color:#1f2d26}
 .qps-chips.money span{background:#cfe9d5;border-color:#7fb68d;color:#0b4a31}
 .qps-chips span.empty{background:#fff;border:1.5px dashed #b4c4b8;color:var(--muted)}
+/* 메인 제목 = 선택한 공고 */
+.quick-head h2{word-break:keep-all;line-height:1.25;border-radius:8px}
+.quick-head p{word-break:keep-all}
+@keyframes noticeFlash{0%{background:#e6f7a6}100%{background:transparent}}
+.quick-head.notice-flash h2{animation:noticeFlash 1.8s ease-out}

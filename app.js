@@ -1002,8 +1002,25 @@
   let lastChipNoticeId=null;
   function updateNoticeChip(){
     if($("currentNoticeChip"))$("currentNoticeChip").textContent="📌 "+(notice.projectName||"공고를 선택하세요")+(notice.remainder?" · 무순위":"");
-    if(lastChipNoticeId!==null&&lastChipNoticeId!==notice.id)marketNoticeReset();
+    const changed=lastChipNoticeId!==null&&lastChipNoticeId!==notice.id;
+    if(changed)marketNoticeReset();
     lastChipNoticeId=notice.id;
+    renderQuickHead(changed);
+  }
+  // 메인 상단 제목 = 지금 선택된 공고 (지역·유형·접수상태 + 단지명 + 주소)
+  function renderQuickHead(changed){
+    const title=$("quickHeadTitle");if(!title)return;
+    const shortRegion=token=>token.replace(/^(.)[^\s]*?(남|북)도$/,"$1$2").replace(/(특별자치시|특별자치도|특별시|광역시|도)$/,"");
+    const tokens=String(notice.location||"").trim().split(/\s+/).filter(Boolean);
+    const area=tokens.length?[shortRegion(tokens[0]),tokens[1]||""].filter(Boolean).join(" "):"";
+    const kind=notice.remainder?"무순위":notice.housingType==="public"?"공공분양":"민영";
+    const fmt=date=>{const d=R.normalizeDate(date);return d?d.slice(5).replace("-","."):""};
+    const status=notice.rceptStart?liveStatus({start:R.normalizeDate(notice.rceptStart),end:R.normalizeDate(notice.rceptEnd)||R.normalizeDate(notice.rceptStart),announce:R.normalizeDate(notice.announceDate)}).label
+      :notice.announceDate?`발표 ${fmt(notice.announceDate)}`:notice.noticeDate?`공고 ${R.normalizeDate(notice.noticeDate).replace(/-/g,".")}`:"";
+    $("quickHeadKicker").textContent=[area,kind,status].filter(Boolean).join(" · ")||"선택한 공고";
+    title.textContent=notice.projectName||"공고를 선택하세요";
+    $("quickHeadMeta").textContent=String(notice.location||"").trim();
+    if(changed){const head=$("quickHead");head.classList.remove("notice-flash");void head.offsetWidth;head.classList.add("notice-flash")}
   }
   function noticePblancUrl(){
     if(notice.pblancUrl)return notice.pblancUrl;
