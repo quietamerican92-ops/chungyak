@@ -395,7 +395,13 @@
   function parseAnnouncement(lines,fileName){
     const text=lines.join("\n");
     const projectLine=lines.find(line=>/입주자\s*모집공고/.test(line)&&line.length<90&&!/최초|현재|공고일/.test(line));
-    const projectName=(projectLine||fileName.replace(/\.pdf$/i,"")).replace(/\s*입주자\s*모집공고.*$/,"").trim();
+    let projectName=(projectLine||fileName.replace(/\.pdf$/i,"")).replace(/\s*입주자\s*모집공고.*$/,"").trim();
+    // "불법행위재공급 입주자모집공고"처럼 제목 줄에 공급유형만 있으면 바로 위 줄의 단지명을 쓴다
+    if(projectLine&&/^(?:불법행위\s*|취소\s*후\s*|계약\s*취소\s*)?(?:재공급|무순위|잔여\s*세대|추가|사후\s*접수)?$/.test(projectName.replace(/\s+/g,""))){
+      const at=lines.indexOf(projectLine);
+      const prev=lines.slice(Math.max(0,at-3),at).reverse().find(line=>line.length>1&&line.length<45&&!/설치|바로가기|스토어|__PAGE|※|■/.test(line));
+      if(prev)projectName=prev.trim();
+    }
     // 공고일: ① "입주자모집공고일은 2026.08.07.(금)입니다" 같은 명시 문장 ② "입주자모집공고일 : 2026.08.07" 표기 ③ 첫 2쪽 상단의 날짜 ④ 최후 폴백
     const dateExplicit=text.match(/입주자\s*모집\s*공고일\s*(?:은|:|：)?\s*(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})/);
     const headText=lines.slice(0,Math.max(60,lines.findIndex(line=>/__PAGE_3__/.test(line)))).join(" ");
@@ -411,7 +417,9 @@
     else if(/경기도\s*\d+년\s*이상/.test(text))priorityRegion="경기도";
     const yearMatch=text.match(new RegExp((priorityRegion||"해당지역").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*(\\d+)년\\s*이상"));
     let sizes=R.parseSupplyRows(lines);
-    const remainder=/무순위|잔여세대|사후\s*접수|계약취소|임의공급/.test(projectName+" "+fileName);
+    // 불법행위·취소후 '재공급'도 통장·가점 무관 추첨이라 무순위 엔진으로 처리
+    const remainder=/무순위|잔여세대|사후\s*접수|계약취소|임의공급|재공급/.test(projectName+" "+fileName+" "+lines.slice(0,8).join(" "));
+    const remainderHeadNoHome=remainder&&/(?:거주자\s*중|거주하는)\s*무주택\s*세대(?:의\s*세대주|주)/.test(text);
     if(!sizes.length&&remainder)sizes=R.parseRemainderSupply(lines);
     const isPrivate=/민영/.test(text)||/민간택지/.test(text);
     const overheated=/투기과열지구/.test(text);
@@ -428,9 +436,21 @@
     const manageRow=joinNo(text.match(/\b(20\d{2})-?(\d{6})\b\s+\d{2}\s+0?\d{2,3}\.\d{2,4}/));
     const manageContext=joinNo(text.match(/주택\s*관리\s*번호[\s\S]{0,2500}?\b(20\d{2})-?(\d{6})\b/));
     const manageFile=joinNo(fileName.match(/\b(20\d{2})-?(\d{6})\b/));
-    const announceMatch=text.match(/당첨자\s*발표[^0-9]{0,40}?(20\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
+    // "최초 당첨자발표일(2024.06.19.)로부터" 같은 과거 이력 문구는 건너뛴다
+    const announceMatch=[...text.matchAll(/당첨자\s*발표[^0-9]{0,40}?(20\d{2})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/g)].find(match=>!/최초\s*$/.test(text.slice(Math.max(0,match.index-8),match.index)))||null;
+    // 일정표: "구분 입주자모집공고일 … 접수일 당첨자발표일 …" 다음 줄에 날짜가 순서대로 나오는 형식
+    const schedule=(()=>{
+      const at=lines.findIndex(line=>/모집\s*공고일/.test(line)&&/접수/.test(line)&&/당첨자\s*발표/.test(line));
+      if(at<0)return null;
+      const dateRow=lines.slice(at+1,at+4).find(line=>(line.match(/20\d{2}\.\d{1,2}\.\d{1,2}/g)||[]).length>=3);
+      if(!dateRow)return null;
+      const dates=(dateRow.match(/20\d{2}\.\d{1,2}\.\d{1,2}/g)||[]).map(value=>R.normalizeDate(value.replace(/\./g,"-")));
+      const order=[...lines[at].matchAll(/모집\s*공고일|접수일?|당첨자\s*발표/g)].map(match=>/공고/.test(match[0])?"notice":/발표/.test(match[0])?"announce":"rcept");
+      const pick=key=>{const i=order.indexOf(key);return i>=0&&dates[i]?dates[i]:""};
+      return {rcept:pick("rcept"),announce:pick("announce")};
+    })();
     return {
-      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow||manageContext||manageFile||"",announceDate:announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):"",remainder,
+      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow||manageContext||manageFile||"",announceDate:schedule?.announce||(announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):""),rceptStart:schedule?.rcept||"",rceptEnd:schedule?.rcept||"",remainder,remainderHeadNoHome,
       housingType:isPrivate?"private":/국민주택|공공주택/.test(text)?"public":"unsupported",
       priorityRegion,priorityYears:yearMatch?num(yearMatch[1]):0,specialMonths:monthReqs.length?Math.min(...monthReqs):6,
       generalMonths:monthReqs.length?Math.max(...monthReqs):24,generalHeadRequired:overheated||adjusted?"yes":"no",pointRates:rates,verified:false,
@@ -531,7 +551,14 @@
           winChance=Math.max(0,Math.min(1,1/exp.specialRate));
           reasons.push(`특공 ${expectationSourceLabel()} 경쟁률 ${exp.specialRate}:1 기준`);
         }
-        if(type==="general"&&notice.housingType==="public"){
+        if(type==="general"&&notice.remainder){
+          // 무순위·재공급: 해당지역 거주가 '자격'이고 가점·우선순위 없이 전량 추첨 → 과거 일반공급 예측은 쓰지 않는다
+          seatText=`전량 추첨 ${supply}세대`;
+          reasons.length=0;
+          reasons.push(`배정 ${supply}세대`,"통장·가점 무관 추첨",notice.remainderHeadNoHome?"무주택세대주 대상":"세부 자격은 공고문 확인");
+          if(notice.expectationsSource==="actual"&&exp.generalRate>0){winChance=Math.min(1,1/exp.generalRate);reasons.push(`실제 경쟁률 ${exp.generalRate}:1`)}
+          else reasons.push("무순위 경쟁률은 수천~수만 대 1이 흔해 예측하지 않음");
+        }else if(type==="general"&&notice.housingType==="public"){
           // 공공분양(국민주택): 가점제 대신 순위순차제 — 저축총액(40㎡ 초과) 또는 납입횟수(40㎡ 이하)
           const st=R.publicGeneralStatus(personKey,profile,notice,size.area);
           seatText=`일반 ${supply}세대 · 순위순차제`;
@@ -585,6 +612,7 @@
   }
   function chanceLabel(row){
     if(row.type==="multi"||row.type==="elder")return "배점순 선발 · 실제 확률 계산 불가";
+    if(row.type==="general"&&notice.remainder&&(row.winChance===null||row.winChance===undefined))return "전량 추첨 · 경쟁률 나오면 계산";
     if(row.type==="general"&&notice.housingType==="public"){
       if(row.winChance>=1)return "저축총액 컷 충족 · 당첨권";
       if(row.winChance===0)return "저축총액 컷 미달";
@@ -597,6 +625,7 @@
   }
   function resultSourceMeta(row){
     if(row?.type==="multi"||row?.type==="elder")return {label:"배점제 · 확률 미산출",cls:"score"};
+    if(notice.remainder&&notice.expectationsSource!=="actual")return {label:"무순위 추첨",cls:"manual"};
     if(notice.expectationsSource==="actual")return {label:"실제 접수값 기반",cls:"actual"};
     if(notice.expectationsSource==="model")return {label:"과거데이터 예측",cls:"model"};
     return {label:"전략 비교값",cls:"manual"};
@@ -1305,7 +1334,7 @@
     };
     const whyGeneral=(elig,counterpart)=>{
       if(dualOff&&counterpart)return "특공+일반 동시신청 옵션이 꺼져 있어 1장만 추천했습니다. 상세 모드 → 전략 설정에서 켤 수 있습니다.";
-      if(!elig.general.ok)return `일반공급 1순위 요건 미충족 — ${elig.general.reason}`;
+      if(!elig.general.ok)return `${notice.remainder?"신청 자격 미충족":"일반공급 1순위 요건 미충족"} — ${elig.general.reason}`;
       return "자격은 충족하지만 최소 면적 조건에 맞는 일반공급 물량이 없습니다.";
     };
     const picks=[
@@ -1923,6 +1952,7 @@
   function applyModelPrediction(auto=false){
     normalizeNoticeFinance(notice);
     if(notice.expectationsSource==="actual"){if(!auto)toast("이미 실제 접수결과가 적용되어 있어 예측으로 덮지 않습니다.");return false}
+    if(notice.remainder){if(!auto)toast("무순위·재공급은 전량 추첨이라 과거 일반공급 데이터로 예측하지 않습니다.");return false}
     let applied=0;
     const lines=[];
     notice.sizes.forEach(size=>{

@@ -305,3 +305,16 @@ assert.strictEqual(R.publicGeneralOutcome({supply:5,applicantsLocal:200,sequence
 // 저축총액 미입력 상태에서 컷만 있으면 계산 불가로 처리
 assert.strictEqual(R.publicGeneralOutcome({supply:10,applicantsLocal:400,sequence:1,savings:0,smallArea:false,cut:2400}).confidence,"NOT_CALCULABLE");
 console.log("rules.test.js: public general outcome passed");
+
+// ===== 무순위·재공급 공급표: 관리번호로 시작하는 1세대 행 (강변역 센트럴 아이파크 불법행위재공급) =====
+const regapLines=["■ 공급대상 [단위: ㎡, 세대]","주택공급면적(㎡) 기타","2026930040 01 084.9811C 84C 84.9811 20.9128 105.8939 65.3878 171.2817 43.2828 1","■ 공급금액","84.9863A 84A 84.9863 21.7600 106.7463 65.3917 172.1380 43.6312 37 10"];
+assert.deepStrictEqual(R.parseRemainderSupply(regapLines).map(s=>[s.name,s.area,s.total,s.general]),[["84C",84.9811,1,1]]);
+// 무주택세대주 한정 재공급: 세대주 아닌 배우자는 신청 불가
+const regapNotice={noticeDate:"2026-09-23",remainder:true,remainderHeadNoHome:true};
+const headProfile=JSON.parse(JSON.stringify(marriedProfile));headProfile.people.b.head=false;
+assert.strictEqual(R.eligibility("a",headProfile,regapNotice).general.ok,true);
+assert.strictEqual(R.eligibility("b",headProfile,regapNotice).general.ok,false);
+assert.ok(/세대주 아님/.test(R.eligibility("b",headProfile,regapNotice).general.reason));
+// 일반 무순위(세대주 한정 없음)는 기존대로 배우자도 가능
+assert.strictEqual(R.eligibility("b",headProfile,{...regapNotice,remainderHeadNoHome:false}).general.ok,true);
+console.log("rules.test.js: remainder re-supply parsing passed");

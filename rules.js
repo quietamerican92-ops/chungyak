@@ -153,7 +153,8 @@
     const clean=(lines||[]).map(line=>normalizeSplitDecimals(line).replace(/\s+/g," ").trim());
     const start=clean.findIndex(line=>/공급대상/.test(line)&&!/일정/.test(line));
     if(start<0)return [];
-    const endOffset=clean.slice(start+1).findIndex(line=>/공급\s*금액.*납부\s*일정/.test(line));
+    // 공급대상 표는 다음 "공급금액" 제목에서 끝난다 (납부일정이 안 붙은 "■ 공급금액"도 포함)
+    const endOffset=clean.slice(start+1).findIndex(line=>/공급\s*금액/.test(line));
     const seg=clean.slice(start,endOffset>=0?start+1+endOffset:start+60);
     const areaAt=[];
     seg.forEach((line,index)=>{
@@ -163,8 +164,21 @@
       }
     });
     const found=new Map();
+    // ① "084.9811C 84C 84.9811 … 1"처럼 한 행에 주택형·약식표기·면적이 있고 마지막 정수가 세대수인 표
+    seg.forEach(line=>{
+      const row=line.match(/\b0?(\d{2,3})\.(\d{4})([A-Z]?)\s+(\d{2,3}[A-Z]?\d*)(?![\d.])/);
+      if(!row)return;
+      const area=Number(`${Number(row[1])}.${row[2]}`),name=row[4];
+      if(name.match(/^\d+/)[0]!==String(Number(row[1])))return;
+      const last=line.trim().split(/\s+/).pop();
+      if(!/^\d{1,3}$/.test(last))return;
+      const count=Number(last);
+      if(count>0&&count<=500&&!found.has(name))found.set(name,{name,area,total:count,agency:0,multi:0,newly:0,elder:0,first:0,baby:0,general:count});
+    });
+    if(found.size)return [...found.values()];
+    // ② 약식표기 바로 뒤에 세대수가 오는 표 (면적 소수점 앞자리를 세대수로 읽지 않도록 뒤에 숫자·점 금지)
     seg.forEach((line,index)=>{
-      for(const match of line.matchAll(/\b(\d{2,3}[A-Z]\d*)\s+(\d{1,3})\b/g)){
+      for(const match of line.matchAll(/\b(\d{2,3}[A-Z]\d*)\s+(\d{1,3})(?![\d.])/g)){
         const name=match[1],count=Number(match[2]);
         if(count<=0||count>500)continue;
         const base=name.match(/^\d+/)[0];
@@ -265,7 +279,7 @@
 
   function paymentSection(lines,sizes){
     // "공급금액"·"공급 금액" 모두 허용. 납부일정이 붙은 표 제목을 최우선으로 잡아 목차성 문구("공급 대상 및 공급 금액")에 앞서 매칭되는 것을 막는다
-    const patterns=[/공급\s*금액.*납부\s*일정|분양\s*금액.*납부\s*일정/,/공급\s*금액.*표|분양\s*금액.*표/,/공급\s*대상.*공급\s*금액/];
+    const patterns=[/공급\s*금액.*납부\s*일정|분양\s*금액.*납부\s*일정/,/공급\s*금액.*표|분양\s*금액.*표/,/공급\s*대상.*공급\s*금액/,/^[■□▶●\s]*(?:공급|분양)\s*금액\s*$/];
     let start=-1;
     for(const pattern of patterns){start=(lines||[]).findIndex(line=>pattern.test(line));if(start>=0)break}
     if(start<0)return null;
@@ -946,8 +960,15 @@
     const secondAllowed=personKey!=="b"||hasSecondApplicant(profile);
     if(notice.remainder){
       const blocked=key=>({ok:false,reason:"무순위 공고에는 "+TYPE_LABELS[key]+" 없음"});
+      // 공고가 '무주택세대주'로 한정한 경우(불법행위·취소후 재공급 등) 세대주·무주택 확인
+      const headRule=Boolean(notice.remainderHeadNoHome);
+      const missing=[];
+      if(!secondAllowed)missing.push("현재 프로필에는 법적 배우자 B가 없음");
+      if(!profile.reWinClean)missing.push("재당첨 제한 확인 필요");
+      if(headRule&&!profile.noHome)missing.push("무주택세대만 신청 가능");
+      if(headRule&&!p.head)missing.push("무주택세대주만 신청 가능 — 세대주 아님");
       const result={agency:blocked("agency"),multi:blocked("multi"),newly:blocked("newly"),elder:blocked("elder"),first:blocked("first"),baby:blocked("baby"),
-        general:{ok:secondAllowed&&profile.reWinClean,reason:secondAllowed&&profile.reWinClean?"무순위 추첨 · 통장·가점 무관(세부 자격은 공고문 확인)":"재당첨 제한 확인 필요"}};
+        general:{ok:missing.length===0,reason:missing.length?missing.join(" · "):`무순위 추첨 · 통장·가점 무관${headRule?" · 무주택세대주 대상":""}(세부 자격은 공고문 확인)`}};
       return result;
     }
     const accountMonths=monthsBetween(p.account,notice.noticeDate);
