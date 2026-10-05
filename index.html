@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20261003-verify2">
+  <link rel="stylesheet" href="./styles.css?v=20261005-backup1">
 </head>
 <body>
   <header class="hero">
@@ -135,6 +135,20 @@
       <details id="quickPlanFold" class="quick-section-fold quick-plan-fold" open>
         <summary><span><b>청약 접수 플랜</b><small id="quickPlanSub">신청 조합 · 당첨 가능성 · 자금 판정</small></span><i data-closed="펼치기" data-open="접기"></i></summary>
         <div id="quickResult" class="quick-result-first"></div>
+      </details>
+
+      <details id="backupFold" class="quick-section-fold backup-fold">
+        <summary><span><b>데이터 백업·복원</b><small id="backupSub">인증키·프로필·저장 공고를 파일로 보관</small></span><i data-closed="펼치기" data-open="접기"></i></summary>
+        <div class="backup-body">
+          <p class="hint">브라우저 기록을 지우거나 카톡 링크·다른 브라우저로 열면 이 기기에 저장된 데이터가 사라질 수 있습니다. 백업 파일에는 <b>인증키와 가족·소득 정보</b>가 들어 있으니 다른 사람에게 보내지 마세요.</p>
+          <div class="backup-actions">
+            <button type="button" id="backupDownload" class="primary">백업 파일 저장</button>
+            <button type="button" id="backupCopy" class="ghost">백업 코드 복사</button>
+            <label class="file-button file-button-sm backup-file">백업 파일로 복원<input id="backupFile" type="file" accept="application/json,.json,.txt"></label>
+          </div>
+          <details class="fold backup-paste"><summary>복사해 둔 백업 코드로 복원</summary><div class="fold-body"><textarea id="backupText" rows="4" placeholder="백업 코드를 여기에 붙여넣으세요"></textarea><button type="button" id="backupRestoreText" class="ghost">이 코드로 복원</button></div></details>
+          <small id="backupState" class="backup-state"></small>
+        </div>
       </details>
       <p class="hint quick-notice-hint">기본 화면은 예치금 충족·재당첨 제한 없음 등 일반적인 상황을 가정합니다. 상세 자격과 공고 숫자는 공고·계산 검수에서 확인하세요.</p>
     </section>
@@ -586,10 +600,10 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20261003-verify2"></script>
-  <script src="./notice-dedupe.js?v=20261003-verify2"></script>
-  <script src="./model-data.js?v=20261003-verify2"></script>
-  <script src="./lawd-map.js?v=20261003-verify2"></script>
-  <script src="./app.js?v=20261003-verify2"></script>
+  <script src="./rules.js?v=20261005-backup1"></script>
+  <script src="./notice-dedupe.js?v=20261005-backup1"></script>
+  <script src="./model-data.js?v=20261005-backup1"></script>
+  <script src="./lawd-map.js?v=20261005-backup1"></script>
+  <script src="./app.js?v=20261005-backup1"></script>
 </body>
 </html>

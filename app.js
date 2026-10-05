@@ -2265,6 +2265,68 @@
       if(applyhomeKey()){localStorage.removeItem(LIVE_CACHE_KEY);toast("인증키를 저장했습니다. 실시간 공고를 불러옵니다.");loadLiveNotices()}
     },600);
   });
+  // ===== 데이터 보존: 브라우저 자동 정리 방지 요청 + 백업·복원 =====
+  const BACKUP_APP="우리집 청약 전략실",BACKUP_PREFIX="subscription_",BACKUP_DATE_KEY="subscription_last_backup_v3";
+  let storagePersisted=null;
+  try{if(navigator.storage?.persisted)navigator.storage.persisted().then(done=>done||(navigator.storage.persist?navigator.storage.persist():false)).then(result=>{storagePersisted=Boolean(result);renderBackupState()}).catch(()=>{})}catch{}
+  function backupPayload(){
+    const data={};
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);
+      // 실시간 공고 캐시는 하루짜리라 빼고, 나머지 앱 데이터는 모두 담는다
+      if(key&&key.startsWith(BACKUP_PREFIX)&&key!==LIVE_CACHE_KEY&&key!==BACKUP_DATE_KEY)data[key]=localStorage.getItem(key);
+    }
+    return {app:BACKUP_APP,version:1,savedAt:new Date().toISOString(),data};
+  }
+  function restoreBackup(text){
+    let parsed;
+    try{parsed=JSON.parse(String(text||"").trim())}catch{throw new Error("백업 내용을 읽을 수 없습니다. 파일이나 코드가 잘리지 않았는지 확인하세요.")}
+    if(!parsed||parsed.app!==BACKUP_APP||!parsed.data||typeof parsed.data!=="object")throw new Error("이 앱의 백업이 아닙니다.");
+    const entries=Object.entries(parsed.data).filter(([key,value])=>key.startsWith(BACKUP_PREFIX)&&typeof value==="string");
+    if(!entries.length)throw new Error("백업에 저장된 항목이 없습니다.");
+    entries.forEach(([key,value])=>localStorage.setItem(key,value));
+    localStorage.removeItem(LIVE_CACHE_KEY);
+    return {count:entries.length,savedAt:parsed.savedAt};
+  }
+  function renderBackupState(){
+    const el=$("backupState");if(!el)return;
+    let last="";try{last=localStorage.getItem(BACKUP_DATE_KEY)||""}catch{}
+    const persist=storagePersisted===true?"브라우저 자동 정리 방지: 켜짐":storagePersisted===false?"브라우저가 자동 정리 방지를 허락하지 않음 — 백업을 꼭 해두세요":"";
+    el.textContent=[last?`마지막 백업 ${last}`:"아직 백업한 적 없음",persist].filter(Boolean).join(" · ");
+    if($("backupSub"))$("backupSub").textContent=last?`마지막 백업 ${last} · 인증키·프로필·저장 공고`:"아직 백업 안 함 · 인증키·프로필·저장 공고를 파일로 보관";
+  }
+  function markBackedUp(){try{localStorage.setItem(BACKUP_DATE_KEY,todayStr())}catch{}renderBackupState()}
+  function applyRestore(text){
+    if(!confirm("이 기기의 현재 데이터를 백업 내용으로 덮어씁니다. 계속할까요?"))return;
+    try{
+      const result=restoreBackup(text);
+      toast(`${result.count}개 항목을 복원했습니다${result.savedAt?` (${String(result.savedAt).slice(0,10)} 백업)`:""}. 다시 불러옵니다.`);
+      setTimeout(()=>location.reload(),900);
+    }catch(error){toast(error.message)}
+  }
+  $("backupDownload").addEventListener("click",()=>{
+    const blob=new Blob([JSON.stringify(backupPayload(),null,1)],{type:"application/json"});
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(blob);link.download=`청약전략실-백업-${todayStr()}.json`;
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(link.href),2000);
+    markBackedUp();toast("백업 파일을 저장했습니다. 다운로드 폴더를 확인하세요.");
+  });
+  $("backupCopy").addEventListener("click",async()=>{
+    const text=JSON.stringify(backupPayload());
+    try{await navigator.clipboard.writeText(text);markBackedUp();toast("백업 코드를 복사했습니다. 메모 앱 등 안전한 곳에 붙여넣어 두세요.")}
+    catch{$("backupText").value=text;document.querySelector(".backup-paste").open=true;$("backupText").select();toast("자동 복사가 막혀 있어 아래 칸에 코드를 띄웠습니다. 길게 눌러 복사하세요.")}
+  });
+  $("backupFile").addEventListener("change",async event=>{
+    const file=event.target.files[0];event.target.value="";
+    if(file)applyRestore(await file.text());
+  });
+  $("backupRestoreText").addEventListener("click",()=>{
+    const text=$("backupText").value.trim();
+    if(!text){toast("백업 코드를 먼저 붙여넣어 주세요.");return}
+    applyRestore(text);
+  });
+  renderBackupState();
   $("openAdvanced").addEventListener("click",()=>setUiMode(false));
   $("backToQuick").addEventListener("click",()=>setUiMode(true));
   document.querySelectorAll('input[name="quickFamily"]').forEach(input=>input.addEventListener("change",updateQuickVisibility));
