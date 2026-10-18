@@ -1,7 +1,8 @@
 (function(root){
   "use strict";
 
-  const TYPE_LABELS={agency:"기관추천",multi:"다자녀",newly:"신혼부부",elder:"노부모부양",first:"생애최초",baby:"신생아",general:"일반공급"};
+  const TYPE_LABELS={agency:"기관추천",multi:"다자녀",newly:"신혼부부",elder:"노부모부양",first:"생애최초",baby:"신생아",general:"일반공급",hope:"신혼희망타운"};
+  function isHopeTownNotice(notice){return Boolean(notice?.hopeTown)||/신혼\s*희망\s*타운/.test(String(notice?.projectName||""))}
   const PROFILE_LABELS={single:"미혼·자녀 없음",single_parent:"미혼·자녀 있음",engaged:"혼인 예정·미신고",married:"법률혼",former:"이혼·사별 등"};
   const INCOME_2025={
     year:2025,
@@ -922,6 +923,102 @@
       basis:smallArea?"전용 40㎡ 이하 → 납입 횟수 많은 순":"전용 40㎡ 초과 → 저축총액(월 최대 25만원 인정) 많은 순",warnings};
   }
 
+  // ===== 신혼희망타운(공공분양) — LH 안내 2026년 적용 기준 =====
+  // 자격 소득 130%(맞벌이 200%) · 1·2단계 가점제 대상 130%(맞벌이 140%) · 총자산 3.62억(출산 자녀 1명 3.97억, 2명+ 4.31억)
+  // 공급 1단계 30%(가점 9점) → 2단계 60%(가점 12점, 1단계 낙첨자 포함) → 3단계 10%(추첨, 2단계 낙첨자 포함)
+  const HOPE_TOWN_2026={
+    source:"LH 신혼희망타운(공공분양) 안내 · 2026년 적용",
+    assetLimit:362000000,assetLimitChild1:397000000,assetLimitChild2:431000000,
+    ratios:{stage1:30,stage2:60,stage3:10},
+    applyIncome:{single:130,dual:200},scoreIncome:{single:130,dual:140},
+    mortgage:{rate:1.6,maxRatio:70,minRatio:30,maxAmount:400000000,graceYears:1,shareMin:10,shareMax:50}
+  };
+  function hopeTownAllocation(total,ratios=HOPE_TOWN_2026.ratios){
+    const t=integer(total);
+    const stage1=Math.min(t,Math.ceil(t*ratios.stage1/100));
+    const stage2=Math.min(t-stage1,Math.ceil(t*ratios.stage2/100));
+    return {total:t,stage1,stage2,stage3:t-stage1-stage2};
+  }
+  function regionKey(value){return String(value||"").trim().split(/\s+/)[0].replace(/(특별자치시|특별자치도|특별시|광역시|도)$/,"").slice(0,2)}
+  function hopeTownStatus(personKey,profile,notice){
+    const p=profile.people?.[personKey]||{};
+    const type=profileType(profile);
+    const date=normalizeDate(notice.noticeDate);
+    const missing=[],warnings=[];
+    if(personKey==="b"&&!hasSecondApplicant(profile))return {ok:false,reason:"현재 프로필에는 법적 배우자 B가 없음",stages:[],missing:["배우자 없음"],warnings};
+    const marriageYears=hasLegalSpouse(profile)&&normalizeDate(profile.marriageDate)&&date?yearsBetween(profile.marriageDate,date):null;
+    const youngestAge=normalizeDate(profile.youngestBirth)&&date?yearsBetween(profile.youngestBirth,date):null;
+    const fetus=integer(profile.fetuses)>0;
+    const childUnder2=fetus||(youngestAge!==null&&youngestAge<3);
+    const childUnder6=fetus||(youngestAge!==null&&youngestAge<7);
+    let kind="",stage1Group=false;
+    if(type==="married"&&(marriageYears!==null&&marriageYears<=7||childUnder6)){kind="신혼부부";stage1Group=(marriageYears!==null&&marriageYears<=2)||childUnder2}
+    else if(type==="engaged"){kind="예비신혼부부";stage1Group=true}
+    else if(type==="single_parent"&&childUnder6){kind="한부모가족";stage1Group=childUnder2}
+    if(!kind)missing.push(type==="married"?"혼인 7년 초과이고 6세 이하 자녀 없음":"신혼부부·예비신혼부부·6세 이하 자녀 한부모만 신청 가능");
+    if(!profile.noHome)missing.push("무주택세대구성원만 신청 가능");
+    if(!profile.reWinClean)missing.push("재당첨 제한 확인 필요");
+    const accountMonths=monthsBetween(p.account,date);
+    const count=integer(p.depositCount)||Math.floor(accountMonths);
+    if(accountMonths<6)missing.push(`청약통장 ${Math.floor(accountMonths)}개월/6개월 필요`);
+    else if(count<6)missing.push(`납입 ${count}회/6회 필요`);
+    if(!integer(p.depositCount))warnings.push("납입 회차 미입력 — 가입 개월 수를 납입 횟수로 가정");
+    // 소득
+    const income=incomeMetrics(profile);
+    const pct=income.pct,dual=income.dualIncome;
+    const applyLimit=dual?HOPE_TOWN_2026.applyIncome.dual:HOPE_TOWN_2026.applyIncome.single;
+    const scoreLimit=dual?HOPE_TOWN_2026.scoreIncome.dual:HOPE_TOWN_2026.scoreIncome.single;
+    if(!income.total)warnings.push("소득 미입력 — 소득 0원으로 판정");
+    if(pct>applyLimit)missing.push(`가구소득 ${pct.toFixed(0)}% > ${applyLimit}%${dual?"(맞벌이)":""}`);
+    // 총자산(부동산·자동차·금융자산 − 부채)
+    const born=integer(profile.children);
+    const assetLimit=born>=2?HOPE_TOWN_2026.assetLimitChild2:born===1?HOPE_TOWN_2026.assetLimitChild1:HOPE_TOWN_2026.assetLimit;
+    const assets=profile.totalAssets===null||profile.totalAssets===undefined||profile.totalAssets===""?null:won(profile.totalAssets);
+    if(assets===null)warnings.push("총자산 미입력 — 자산기준 판정 불가");
+    else if(assets>assetLimit)missing.push(`총자산 ${(assets/1e8).toFixed(2)}억 > ${(assetLimit/1e8).toFixed(2)}억${born?`(출산 자녀 ${born}명 완화)`:""}`);
+    if(profile.totalAssetsDerived)warnings.push("총자산을 현금+처분가능 자산 합계로 추정 — 부동산·자동차·부채 반영 시 달라질 수 있음");
+    // 가점
+    const regionOk=regionKey(profile.residenceRegion)&&regionKey(profile.residenceRegion)===regionKey(notice.priorityRegion||notice.location);
+    const residenceYears=regionOk&&normalizeDate(profile.residenceStart)&&date?yearsBetween(profile.residenceStart,date):null;
+    const residencePts=residenceYears===null?0:residenceYears>=2?3:residenceYears>=1?2:1;
+    const countPts=count>=24?3:count>=12?2:count>=6?1:0;
+    const incomePts=dual?(pct<=80?3:pct<=110?2:1):(pct<=70?3:pct<=100?2:1);
+    const kids=specialChildCount(profile);
+    const kidsPts=kids>=3?3:kids;
+    const birth=normalizeDate(p.birth);
+    let noHomeStart=birth?addYears(birth,19):"";
+    const disposal=profile.neverHome?"":normalizeDate(profile.lastHomeDisposal);
+    if(disposal&&(!noHomeStart||disposal>noHomeStart))noHomeStart=disposal;
+    const noHomeYears=profile.noHome&&noHomeStart&&date?Math.max(0,yearsBetween(noHomeStart,date)):0;
+    const noHomePts=!profile.noHome?0:noHomeYears>=3?3:noHomeYears>=1?2:1;
+    const score1={total:incomePts+residencePts+countPts,max:9,parts:[`소득 ${pct.toFixed(0)}% ${incomePts}점`,`${regionOk?"해당지역":"타지역"} 거주 ${residenceYears===null?"-":residenceYears.toFixed(1)+"년"} ${residencePts}점`,`납입 ${count}회 ${countPts}점`]};
+    const score2={total:kidsPts+noHomePts+residencePts+countPts,max:12,parts:[`자녀 ${kids}명(태아 포함) ${kidsPts}점`,`무주택 ${noHomeYears.toFixed(1)}년 ${noHomePts}점`,`거주 ${residencePts}점`,`납입 ${countPts}점`]};
+    if(!regionOk)warnings.push("해당 시·도 거주자가 아니면 거주기간 0점이고 지역우선에서도 밀립니다");
+    warnings.push("무주택기간은 만 19세 이후 기준으로 계산 — 공고문 산정 기준 확인");
+    const ok=missing.length===0;
+    const canScore=ok&&pct<=scoreLimit;
+    const stages=!ok?[]:canScore?(stage1Group?[1,2,3]:[2,3]):[3];
+    const reason=!ok?missing.join(" · "):`${kind} · ${stages.includes(1)?`1단계 가점 ${score1.total}/9 → `:""}${stages.includes(2)?`2단계 가점 ${score2.total}/12 → `:`소득 ${pct.toFixed(0)}%(가점제 ${scoreLimit}% 초과) → `}3단계 추첨`;
+    return {ok,reason,kind,stage1Group,stages,score1,score2,income:{pct,dual,applyLimit,scoreLimit,total:income.total,base:income.base},asset:{total:assets,limit:assetLimit,born},count,missing,warnings};
+  }
+  // 수익공유형 모기지: 주택가격이 총자산기준(3.62억)을 넘으면 주택가격의 30% 이상 의무 가입
+  function hopeTownMortgage(price,options={}){
+    const m=HOPE_TOWN_2026.mortgage;
+    price=won(price);
+    const mandatory=price>HOPE_TOWN_2026.assetLimit;
+    const minLoan=mandatory?Math.ceil(price*m.minRatio/100):0;
+    const maxLoan=Math.min(m.maxAmount,Math.floor(price*m.maxRatio/100));
+    const wanted=options.loan===undefined||options.loan===null?minLoan:won(options.loan);
+    const amount=Math.max(minLoan,Math.min(maxLoan,wanted));
+    const years=integer(options.years)||30;
+    const r=m.rate/1200,n=Math.max(1,(years-m.graceYears)*12);
+    const graceMonthly=Math.round(amount*r);
+    const monthly=amount?Math.round(amount*r/(1-Math.pow(1+r,-n))):0;
+    const sale=won(options.expectedSale);
+    const gain=sale>price?sale-price:0;
+    return {price,mandatory,minLoan,maxLoan,amount,rate:m.rate,years,graceYears:m.graceYears,graceMonthly,monthly,gain,shareMin:Math.round(gain*m.shareMin/100),shareMax:Math.round(gain*m.shareMax/100)};
+  }
+
   // 국민주택 일반공급 결과 판정: 순위순차제는 추첨이 아니므로 경쟁자 분포 없이 확률을 만들지 않는다
   // cut = 사용자가 입력한 커트라인(40㎡ 초과는 저축총액 만원, 40㎡ 이하는 납입 횟수)
   function publicGeneralOutcome(input){
@@ -956,6 +1053,12 @@
 
   function eligibility(personKey,profile,notice){
     const p=profile.people[personKey];
+    if(isHopeTownNotice(notice)){
+      // 신혼희망타운은 별도 단일 트랙: 일반·특공 유형 없이 1·2단계 가점제 + 3단계 추첨
+      const status=hopeTownStatus(personKey,profile,notice);
+      const blocked=key=>({ok:false,reason:`신혼희망타운 공고에는 ${TYPE_LABELS[key]} 없음`});
+      return {agency:blocked("agency"),multi:blocked("multi"),newly:blocked("newly"),elder:blocked("elder"),first:blocked("first"),baby:blocked("baby"),general:blocked("general"),hope:status};
+    }
     const type=profileType(profile);
     const secondAllowed=personKey!=="b"||hasSecondApplicant(profile);
     if(notice.remainder){
@@ -1003,6 +1106,7 @@
       result[supplyType].band=band;
       if(band.stage===0){result[supplyType].ok=false;result[supplyType].reason=band.label;}
     });
+    result.hope={ok:false,reason:"신혼희망타운 공고에만 해당"};
     if(notice.housingType==="public"){
       // 공공분양: 일반공급은 가점제가 아니라 순위순차제, 특공은 소득·자산 기준이 민영과 다름
       ["agency","multi","newly","elder","first","baby"].forEach(key=>{
@@ -1113,7 +1217,7 @@
     return clamp01(1-(list||[]).reduce((product,p)=>product*(1-clamp01(p||0)),1));
   }
 
-  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,noHomePeriodStart,publicGeneralStatus,publicGeneralOutcome,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
+  const api={TYPE_LABELS,PROFILE_LABELS,INCOME_2025,normalizeDate,pointRateForArea,generalAllocation,specialAllocation,availableSpecialStages,specialWinProbability,generalWinProbability,ceilClamped,allocateGeneralActual,allocateNewlywedActual,actualGeneralProbability,actualNewlywedProbability,actualLotteryProbability,multiChildBenchmark,affordableShare,combineSamePerson,combineSamePersonAffordable,combineIndependent,noHomePeriodStart,publicGeneralStatus,publicGeneralOutcome,HOPE_TOWN_2026,isHopeTownNotice,hopeTownAllocation,hopeTownStatus,hopeTownMortgage,acquisitionCostEstimate,parseSupplyRows,parseRemainderSupply,parsePaymentData,parseInterimLoanPlan,parseOptionData,annuityPrincipal,mortgagePolicyCap,calculateLoanCapacity,buildMonthlyInterestSchedule,buildFundingPlan,yearsBetween,monthsBetween,profileType,hasLegalSpouse,hasSecondApplicant,specialChildCount,generalChildCount,automaticHouseholdSize,incomeBase100,publishedIncomeThreshold,incomeMetrics,addYears,ownAccountPoints,spouseAccountPoints,generalNoHomePoints,generalScore,multiNoHomePoints,multiScore,incomeStage,profileSummary,eligibility};
   root.SubscriptionRules=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

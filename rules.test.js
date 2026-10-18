@@ -318,3 +318,38 @@ assert.ok(/세대주 아님/.test(R.eligibility("b",headProfile,regapNotice).gen
 // 일반 무순위(세대주 한정 없음)는 기존대로 배우자도 가능
 assert.strictEqual(R.eligibility("b",headProfile,{...regapNotice,remainderHeadNoHome:false}).general.ok,true);
 console.log("rules.test.js: remainder re-supply parsing passed");
+
+// ===== 신혼희망타운(공공분양) =====
+assert.deepStrictEqual(R.hopeTownAllocation(166),{total:166,stage1:50,stage2:100,stage3:16});
+assert.deepStrictEqual(R.hopeTownAllocation(3),{total:3,stage1:1,stage2:2,stage3:0});
+const hopeNotice={noticeDate:"2026-08-10",housingType:"public",hopeTown:true,priorityRegion:"경기도",location:"경기도 성남시 수정구 신흥동 81-8"};
+const hope=JSON.parse(JSON.stringify(marriedProfile));
+hope.marriageDate="2025-03-01";hope.children=1;hope.fetuses=0;hope.youngestBirth="2025-12-01";
+hope.residenceRegion="경기도";hope.residenceStart="2020-01-01";
+hope.people.a.monthlyIncome=4000000;hope.people.b.monthlyIncome=0;hope.people.a.depositCount=30;
+hope.totalAssets=200000000;
+let hs=R.hopeTownStatus("a",hope,hopeNotice);
+assert.strictEqual(hs.ok,true);assert.strictEqual(hs.kind,"신혼부부");
+assert.deepStrictEqual(hs.stages,[1,2,3]);                       // 혼인 2년 이내 → 1단계부터
+assert.strictEqual(hs.asset.limit,397000000);                    // 출산 자녀 1명 완화
+assert.strictEqual(hs.score1.total,3+3+3);                       // 소득 ≤70%·거주 2년+·납입 24회+
+// 맞벌이 소득 140~200%: 자격은 있지만 가점제(1·2단계) 불가 → 3단계 추첨만
+const hopeDual=JSON.parse(JSON.stringify(hope));hopeDual.people.a.monthlyIncome=9000000;hopeDual.people.b.monthlyIncome=5000000;
+hs=R.hopeTownStatus("a",hopeDual,hopeNotice);
+assert.strictEqual(hs.ok,true);assert.deepStrictEqual(hs.stages,[3]);
+// 총자산 초과 → 신청 불가
+const hopeRich=JSON.parse(JSON.stringify(hope));hopeRich.totalAssets=800000000;
+hs=R.hopeTownStatus("a",hopeRich,hopeNotice);
+assert.strictEqual(hs.ok,false);assert.ok(/총자산 8.00억 > 3.97억/.test(hs.reason));
+// 혼인 7년 초과 + 6세 이하 자녀 없음 → 불가
+const hopeOld=JSON.parse(JSON.stringify(hope));hopeOld.marriageDate="2015-01-01";hopeOld.youngestBirth="2016-01-01";
+assert.strictEqual(R.hopeTownStatus("a",hopeOld,hopeNotice).ok,false);
+// 혼인 3년 + 4세 자녀 → 2단계부터
+const hopeMid=JSON.parse(JSON.stringify(hope));hopeMid.marriageDate="2023-01-01";hopeMid.youngestBirth="2022-06-01";
+assert.deepStrictEqual(R.hopeTownStatus("a",hopeMid,hopeNotice).stages,[2,3]);
+// 수익공유형 모기지: 7.98억 → 의무(30% 이상), 한도 min(70%, 4억)
+const mg=R.hopeTownMortgage(798310000,{expectedSale:1098310000});
+assert.strictEqual(mg.mandatory,true);assert.strictEqual(mg.minLoan,239493000);assert.strictEqual(mg.maxLoan,400000000);
+assert.strictEqual(mg.amount,mg.minLoan);assert.strictEqual(mg.shareMin,30000000);assert.strictEqual(mg.shareMax,150000000);
+assert.strictEqual(R.hopeTownMortgage(300000000).mandatory,false);
+console.log("rules.test.js: hope town rules passed");

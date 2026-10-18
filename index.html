@@ -13,7 +13,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="stylesheet" href="./styles.css?v=20261018-opt1">
+  <link rel="stylesheet" href="./styles.css?v=20261018-hope2">
 </head>
 <body>
   <header class="hero">
@@ -108,6 +108,7 @@
           <label>지금 동원 가능한 현금<input id="quickCash" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>앞으로 월 저축 가능액<input id="quickSaving" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span></label>
           <label>잔금 때 팔 수 있는 주식·자산<input id="quickAsset" class="money-input" type="text" inputmode="numeric" value="0" autocomplete="off"><span class="suffix">원</span><small class="field-help">현재 평가액 (선택)</small></label>
+          <label>가구 총자산(부채 차감)<input id="quickTotalAssets" class="money-input" type="text" inputmode="numeric" value="" placeholder="비우면 현금+자산으로 추정" autocomplete="off"><span class="suffix">원</span><small class="field-help">신혼희망타운 자산기준용 · 부동산·자동차·금융자산 − 부채</small></label>
         </div>
         <input id="quickCredit" type="hidden" value="0"><input id="quickCreditRate" type="hidden" value="6.5">
         <details class="fold quick-loan-fold">
@@ -212,6 +213,7 @@
           </div>
           <div class="checks">
             <label><input id="assetOk" type="checkbox" checked> 공고문상 부동산 자산기준 충족</label>
+            <label class="total-assets-field">가구 총자산(부채 차감)<input id="totalAssets" class="money-input" type="text" inputmode="numeric" value="" placeholder="신혼희망타운용 · 비우면 추정" autocomplete="off"></label>
           </div>
           <div id="childCountSummary" class="calc-summary"></div>
           <p class="hint">태아는 특공의 자녀 수와 소득 가구원 수에는 포함하지만, 일반공급 부양가족은 주민등록표 기준으로 별도 판정합니다.</p>
@@ -600,10 +602,10 @@
 
   <footer class="app-foot">🔒 PDF·가족정보·인증키는 서버 전송 없이 이 기기 안에서만 저장·처리됩니다 · 본 계산기는 참고용이며 최종 자격·당첨 판정은 청약Home 기준입니다</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./rules.js?v=20261018-opt1"></script>
-  <script src="./notice-dedupe.js?v=20261018-opt1"></script>
-  <script src="./model-data.js?v=20261018-opt1"></script>
-  <script src="./lawd-map.js?v=20261018-opt1"></script>
-  <script src="./app.js?v=20261018-opt1"></script>
+  <script src="./rules.js?v=20261018-hope2"></script>
+  <script src="./notice-dedupe.js?v=20261018-hope2"></script>
+  <script src="./model-data.js?v=20261018-hope2"></script>
+  <script src="./lawd-map.js?v=20261018-hope2"></script>
+  <script src="./app.js?v=20261018-hope2"></script>
 </body>
 </html>

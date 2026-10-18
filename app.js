@@ -64,7 +64,7 @@
     "singleHouseholdKind","unmarriedChildRegistered","marriageDate","children","fetuses","marriageChildren","infants","youngestBirth","assetOk",
     "householdSize","householdSizeAuto","aMonthlyIncome","bMonthlyIncome",
     "aAccount","aBirth","aOtherDependents","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","aDepositTotal","aDepositCount",
-    "bAccount","bBirth","bOtherDependents","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bDepositTotal","bDepositCount",
+    "totalAssets","bAccount","bBirth","bOtherDependents","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bDepositTotal","bDepositCount",
     "minArea","mode","bothApply","allowSpecialGeneral","diversify"
   ];
   const CHECK_IDS=new Set(["unmarriedChildRegistered","noHome","neverHome","specialClean","reWinClean","assetOk","aHead","aDeposit","aTax5","aElder3","aElderNoHome","aAgency","aThreeGeneration","aSingleParent5","bHead","bDeposit","bTax5","bElder3","bElderNoHome","bAgency","bThreeGeneration","bSingleParent5","bothApply","allowSpecialGeneral","diversify"]);
@@ -241,6 +241,10 @@
       youngestBirth:d("youngestBirth"),assetOk:c("assetOk"),householdSize:num(v("householdSize")),people:{a:person("a"),b:person("b")}
     };
     if(v("householdSizeAuto")==="yes")partial.householdSize=R.automaticHouseholdSize(partial);
+    // 금액 칸은 비우면 "0"이 되므로 0은 미입력으로 보고 현금+처분가능 자산으로 추정한다
+    const assetsTyped=num(String($("totalAssets")?.value||"").replace(/[^0-9]/g,""));
+    if(assetsTyped>0)partial.totalAssets=assetsTyped;
+    else{const guess=num($("quickCash")?.value)+num($("quickAsset")?.value)||num($("cashNow")?.value);partial.totalAssets=guess||null;partial.totalAssetsDerived=Boolean(guess)}
     return partial;
   }
   function formatWon(value){return Math.round(num(value)).toLocaleString("ko-KR")+"원";}
@@ -450,7 +454,7 @@
       return {rcept:pick("rcept"),announce:pick("announce")};
     })();
     return {
-      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow||manageContext||manageFile||"",announceDate:schedule?.announce||(announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):""),rceptStart:schedule?.rcept||"",rceptEnd:schedule?.rcept||"",remainder,remainderHeadNoHome,
+      id:"notice-"+Date.now(),projectName:projectName||"이름 없는 공고",noticeDate:date,location,houseManageNo:manageRow||manageContext||manageFile||"",hopeTown:/신혼\s*희망\s*타운/.test(projectName+" "+fileName),announceDate:schedule?.announce||(announceMatch?R.normalizeDate(`${announceMatch[1]}-${announceMatch[2]}-${announceMatch[3]}`):""),rceptStart:schedule?.rcept||"",rceptEnd:schedule?.rcept||"",remainder,remainderHeadNoHome,
       housingType:isPrivate?"private":/국민주택|공공주택/.test(text)?"public":"unsupported",
       priorityRegion,priorityYears:yearMatch?num(yearMatch[1]):0,specialMonths:monthReqs.length?Math.min(...monthReqs):6,
       generalMonths:monthReqs.length?Math.max(...monthReqs):24,generalHeadRequired:overheated||adjusted?"yes":"no",pointRates:rates,verified:false,
@@ -525,6 +529,23 @@
     const priority=residencePriority(profile);
     const mode=$("mode").value,minArea=num($("minArea").value);
     const rows=[];
+    if(R.isHopeTownNotice(notice)){
+      const st=e.hope;
+      if(!st?.ok)return [];
+      notice.sizes.forEach(size=>{
+        const supply=num(size.total);
+        if(!supply||num(size.area)<minArea)return;
+        const alloc=R.hopeTownAllocation(supply);
+        const seats=(st.stages.includes(1)?alloc.stage1:0)+(st.stages.includes(2)?alloc.stage2:0)+alloc.stage3;
+        let score=(st.stages.includes(1)?55:st.stages.includes(2)?42:18)+Math.log2(supply+1)*6+(st.stages.includes(1)?st.score1.total*2:0)+(st.stages.includes(2)?st.score2.total*1.5:0);
+        if(mode==="probability")score-=num(size.area)*.04;
+        if(mode==="quality")score+=num(size.area)*.22;
+        if(mode==="balance")score+=Math.min(85,num(size.area))*.08;
+        const reasons=[`배정 ${supply}세대`,st.reason,...(st.stages.includes(1)?[`1단계 ${st.score1.parts.join(" · ")}`]:[]),...(st.stages.includes(2)?[`2단계 ${st.score2.parts.join(" · ")}`]:[]),...st.warnings.map(w=>"⚠ "+w)];
+        rows.push({personKey,personLabel,type:"hope",size:size.name,area:size.area,supply,seats,seatText:`1단계 ${alloc.stage1}·2단계 ${alloc.stage2}·추첨 ${alloc.stage3}`,reasons,winChance:null,hope:st,score:Math.max(1,Math.min(99,score))});
+      });
+      return rows.sort((a,b)=>b.score-a.score);
+    }
     notice.sizes.forEach(size=>{
       if(num(size.area)<minArea)return;
       Object.keys(R.TYPE_LABELS).forEach(type=>{
@@ -611,6 +632,7 @@
     return {special,general};
   }
   function chanceLabel(row){
+    if(row.type==="hope"){const st=row.hope;return st.stages.includes(1)?`가점제 · 1단계 ${st.score1.total}/9 · 2단계 ${st.score2.total}/12`:st.stages.includes(2)?`가점제 · 2단계 ${st.score2.total}/12`:"3단계 추첨만 가능 (가점제 소득기준 초과)"}
     if(row.type==="multi"||row.type==="elder")return "배점순 선발 · 실제 확률 계산 불가";
     if(row.type==="general"&&notice.remainder&&(row.winChance===null||row.winChance===undefined))return "전량 추첨 · 경쟁률 나오면 계산";
     if(row.type==="general"&&notice.housingType==="public"){
@@ -624,7 +646,7 @@
     return `${source} 당첨확률 ${(row.winChance*100).toFixed(row.winChance<.1?1:0)}%`;
   }
   function resultSourceMeta(row){
-    if(row?.type==="multi"||row?.type==="elder")return {label:"배점제 · 확률 미산출",cls:"score"};
+    if(row?.type==="multi"||row?.type==="elder"||row?.type==="hope")return {label:"배점제 · 확률 미산출",cls:"score"};
     if(notice.remainder&&notice.expectationsSource!=="actual")return {label:"무순위 추첨",cls:"manual"};
     if(notice.expectationsSource==="actual")return {label:"실제 접수값 기반",cls:"actual"};
     if(notice.expectationsSource==="model")return {label:"과거데이터 예측",cls:"model"};
@@ -680,7 +702,7 @@
   }
   function renderEligibility(profile){
     const people=R.hasSecondApplicant(profile)?["a","b"]:["a"];
-    const types=Object.keys(R.TYPE_LABELS);
+    const types=R.isHopeTownNotice(notice)?["hope"]:Object.keys(R.TYPE_LABELS).filter(type=>type!=="hope");
     $("eligibilityTable").innerHTML=`<table><thead><tr><th>유형</th>${people.map(key=>`<th>${key==="a"?"신청자 A":"배우자 B"}</th>`).join("")}</tr></thead><tbody>${types.map(type=>`<tr><td><b>${R.TYPE_LABELS[type]}</b></td>${people.map(key=>{
       const item=R.eligibility(key,profile,notice)[type];
       return `<td class="eligibility-cell"><span class="eligibility-mark ${item.ok?"yes":"no"}">${item.ok?"O":"X"}</span><br><span class="muted">${esc(item.reason)}${item.band?.stage?` · ${esc(item.band.label)}`:""}</span></td>`;
@@ -962,7 +984,7 @@
     renderLoanCapacity(plan);renderInterestAnalysis(plan);renderFundingPhases(plan);renderFundingTimeline(plan);queueFundingSave();
   }
   const UI_MODE_KEY="subscription_ui_mode_v3";
-  const QUICK_FIELD_MAP=[["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"],["quickNetIncome","repayNetIncome"],["quickCreditRate","repayCreditRate"],["quickMortgageRate","mortgageInterestRate"],["quickMortgageYears","mortgageYears"]];
+  const QUICK_FIELD_MAP=[["quickTotalAssets","totalAssets"],["quickBirth","aBirth"],["quickAccount","aAccount"],["quickBirthB","bBirth"],["quickAccountB","bAccount"],["quickMarriage","marriageDate"],["quickChildren","children"],["quickFetuses","fetuses"],["quickInfants","infants"],["quickYoungest","youngestBirth"],["quickRegion","residenceRegion"],["quickResidence","residenceStart"],["quickIncomeA","aMonthlyIncome"],["quickIncomeB","bMonthlyIncome"],["quickCash","cashNow"],["quickSaving","monthlySaving"],["quickCredit","gapCredit"],["quickAsset","repayAssetValue"],["quickNetIncome","repayNetIncome"],["quickCreditRate","repayCreditRate"],["quickMortgageRate","mortgageInterestRate"],["quickMortgageYears","mortgageYears"]];
   function quickFamily(){return document.querySelector('input[name="quickFamily"]:checked')?.value||"single"}
   function updateQuickVisibility(){
     const married=quickFamily()==="married";
@@ -1023,7 +1045,8 @@
     const years=residence?Math.floor(R.yearsBetween(residence,todayStr())):null;
     const familyLabel={single:"1인 가구",married:"부부",single_parent:"한부모"}[state.family]||"가구";
     const family=[familyLabel,children||fetuses?`자녀 ${children}${fetuses?` · 태아 ${fetuses}`:""}`:"자녀 없음",region?`${region}${years!==null?` ${years}년 거주`:""}`:"",$("quickNoHome").checked?"무주택":"유주택"].filter(Boolean);
-    const money=[income?`월소득 ${formatWonShort(income)}`:"",cash?`현금 ${formatWonShort(cash)}`:"",saving?`월저축 ${formatWonShort(saving)}`:"",asset?`자산 ${formatWonShort(asset)}`:""].filter(Boolean);
+    const totalAssets=num($("quickTotalAssets")?.value);
+    const money=[income?`월소득 ${formatWonShort(income)}`:"",cash?`현금 ${formatWonShort(cash)}`:"",saving?`월저축 ${formatWonShort(saving)}`:"",asset?`자산 ${formatWonShort(asset)}`:"",totalAssets?`총자산 ${formatWonShort(totalAssets)}`:""].filter(Boolean);
     const missing=[...state.missing,...(income?[]:["소득"]),...(cash?[]:["현금"]),...(saving?[]:["월저축"])];
     const chips=list=>list.map(text=>`<span>${esc(text)}</span>`).join("");
     el.innerHTML=`<div class="qps-row"><em>가족</em><div class="qps-chips">${chips(family)}</div></div><div class="qps-row"><em>자금</em><div class="qps-chips money">${money.length?chips(money):`<span class="empty">아직 입력 안 함</span>`}</div></div>${missing.length?`<small class="qps-missing">입력 필요 · ${esc(missing.join(" · "))}</small>`:""}`;
@@ -1042,7 +1065,7 @@
     const shortRegion=token=>token.replace(/^(.)[^\s]*?(남|북)도$/,"$1$2").replace(/(특별자치시|특별자치도|특별시|광역시|도)$/,"");
     const tokens=String(notice.location||"").trim().split(/\s+/).filter(Boolean);
     const area=tokens.length?[shortRegion(tokens[0]),tokens[1]||""].filter(Boolean).join(" "):"";
-    const kind=notice.remainder?(notice.supplyKind||"무순위"):notice.housingType==="public"?"공공분양":"민영";
+    const kind=notice.remainder?(notice.supplyKind||"무순위"):R.isHopeTownNotice(notice)?"신혼희망타운":notice.housingType==="public"?"공공분양":"민영";
     const fmt=date=>{const d=R.normalizeDate(date);return d?d.slice(5).replace("-","."):""};
     const status=notice.rceptStart?liveStatus({start:R.normalizeDate(notice.rceptStart),end:R.normalizeDate(notice.rceptEnd)||R.normalizeDate(notice.rceptStart),announce:R.normalizeDate(notice.announceDate)}).label
       :notice.announceDate?`발표 ${fmt(notice.announceDate)}`:notice.noticeDate?`공고 ${R.normalizeDate(notice.noticeDate).replace(/-/g,".")}`:"";
@@ -1197,6 +1220,12 @@
     const el=$("quickSupplyTable");
     if(!el)return;
     if(!Array.isArray(notice.sizes)||!notice.sizes.length){el.innerHTML=`<p class="muted">공고를 불러오면 주택형별 특공·일반 물량이 표시됩니다.</p>`;return}
+    if(R.isHopeTownNotice(notice)){
+      const rows=notice.sizes.map(size=>({size,alloc:R.hopeTownAllocation(num(size.total))}));
+      const tot=key=>rows.reduce((sum,row)=>sum+row.alloc[key],0);
+      el.innerHTML=`<p class="qs-check none">신혼희망타운 · 1단계 30%(혼인 2년 이내·2세 이하 자녀, 가점 9점) → 2단계 60%(1단계 낙첨자 포함, 가점 12점) → 3단계 10% 추첨</p><div class="table-wrap"><table class="qs-table"><thead><tr><th>주택형</th><th>총</th><th>1단계</th><th>2단계</th><th>추첨</th></tr></thead><tbody>${rows.map(({size,alloc})=>`<tr><td><button type="button" class="qs-type-btn" data-price-size="${esc(size.name)}"><b>${esc(size.name)}</b><small>가격 ▸</small></button></td><td class="num-cell">${alloc.total}</td><td class="num-cell">${alloc.stage1}</td><td class="num-cell">${alloc.stage2}</td><td class="num-cell">${alloc.stage3}</td></tr>`).join("")}</tbody><tfoot><tr><td>합계</td><td class="num-cell">${tot("total")}</td><td class="num-cell">${tot("stage1")}</td><td class="num-cell">${tot("stage2")}</td><td class="num-cell">${tot("stage3")}</td></tr></tfoot></table></div><p class="hint">단계별 세대수는 비율에 올림을 적용한 추정치입니다. 정확한 배정은 공고문을 확인하세요.</p>`;
+      return;
+    }
     const check=notice.supplyCheck;
     const checkBadge=!check?(notice.sourceFile==="청약홈 API 자동 구성"?`<p class="qs-check ok">✓ 청약홈 주택형별 물량 그대로</p>`:`<p class="qs-check none">청약홈 대조 전 · PDF에서 읽은 물량</p>`)
       :check.status==="ok"?`<p class="qs-check ok">✓ 청약홈과 주택형·세대수 일치 (${esc(check.house)})</p>`
@@ -1253,8 +1282,9 @@
       cashNow,reserve:0,monthlySaving,
       contractDate:notice.expectedContractDate||"",moveInDate:notice.expectedMoveInDate||"",
       interimInterestRate:4.5,interestPaymentMode:"deferred",
-      annualIncome,collateralValue:price,mortgageLtv:40,mortgageInterestRate:mRate,stressRate:1.5,dsrLimit:40,mortgageYears:mYears,
-      policyScope:/(서울|경기|인천)/.test(String(notice.location||notice.priorityRegion||""))?"capital":"none",
+      ...(R.isHopeTownNotice(notice)
+        ?{annualIncome,collateralValue:price,mortgageLtv:R.HOPE_TOWN_2026.mortgage.maxRatio,mortgageInterestRate:R.HOPE_TOWN_2026.mortgage.rate,stressRate:0,dsrLimit:40,mortgageYears:30,policyScope:"none",manualMortgageCap:R.HOPE_TOWN_2026.mortgage.maxAmount}
+        :{annualIncome,collateralValue:price,mortgageLtv:40,mortgageInterestRate:mRate,stressRate:1.5,dsrLimit:40,mortgageYears:mYears,policyScope:/(서울|경기|인천)/.test(String(notice.location||notice.priorityRegion||""))?"capital":"none"}),
       payments
     });
   }
@@ -1303,6 +1333,14 @@
     const fillCls=shortage?(stillShort>0?"bad":"ok"):timing?(stillTiming>0?"bad":"ok"):"";
     return `<div class="qp-after"><div class="qp-after-row"><span>부족분 메우기</span><b class="${fillCls}">${fillText}</b></div><div class="qp-after-row"><span>입주 후 매달</span><b>${formatWon(total)}<small>${netIncome?` · 세후소득의 ${ratio.toFixed(0)}%`:" · 세후소득 입력 시 부담률 표시"}</small></b></div><small class="qp-after-note">주담대 ${formatWonShort(mortgage)} · ${mYears}년 · ${mRate.toFixed(1)}% · ${modeLabel} = ${formatWon(mortgagePmt)}${creditToGap?` ｜ ${creditNote}`:""}${assetLeft?` ｜ 남은 자산 ${formatWonShort(assetLeft)}은 주담대 축소에 투입`:""}${ratio>40?" · ⚠ 상환부담 40% 초과":""}</small></div>`;
   }
+  function hopeMortgageHtml(price){
+    const m=R.hopeTownMortgage(price),cfg=R.HOPE_TOWN_2026.mortgage;
+    const eok=value=>formatWonShort(value);
+    return `<div class="hope-mortgage"><b>수익공유형 모기지 ${m.mandatory?"<i class='bad'>의무 가입</i>":"<i>선택</i>"}</b>
+      <div>${m.mandatory?`분양가가 총자산기준(${eok(R.HOPE_TOWN_2026.assetLimit)})을 넘어 <b>최소 ${eok(m.minLoan)}</b>(분양가 30%) 이상 받아야 합니다.`:"분양가가 총자산기준 이하라 가입은 선택입니다."} 한도 <b>${eok(m.maxLoan)}</b>(70%·최대 4억) · 연 ${cfg.rate}% 고정 · ${cfg.graceYears}년 거치 후 19·29년 상환</div>
+      <div>최소 금액 기준 월 상환 약 <b>${eok(m.monthly)}</b> (30년, 거치기간엔 이자 약 ${eok(m.graceMonthly)})</div>
+      <div class="warn">매도·상환 때 <b>시세차익의 ${cfg.shareMin}~${cfg.shareMax}%</b>를 주택도시기금과 정산 — 예: 1억 오르면 ${eok(100000000*cfg.shareMin/100)}~${eok(100000000*cfg.shareMax/100)}. 정산비율은 대출비율·기간·자녀 수로 정해집니다.</div></div>`;
+  }
   function quickProbabilitySummary(picks){
     if(!applyhomeLastRates.length)return `<div class="portfolio-odds pending"><div><span>실질 당첨 가능성</span><b>접수결과 대기</b><small>${notice.expectationsSource==="model"?"과거데이터 예측은 후보 비교에만 사용 중입니다.":"청약홈 접수결과가 나오면 법정 배정구조로 계산합니다."}</small></div><button type="button" class="ghost" data-load-actual>실제 접수결과 불러오기</button></div>`;
     const catFor=pick=>pick.row.type!=="newly"?pick.row.type:`newly${R.eligibility(pick.key,profileData(),notice).newly?.band?.stage||3}`;
@@ -1329,6 +1367,7 @@
     const specialTypes=["newly","first","baby","multi","elder","agency"];
     const whySpecial=(elig,counterpart)=>{
       if(notice.remainder)return "무순위 공고에는 특별공급이 없습니다.";
+      if(R.isHopeTownNotice(notice))return elig.hope?.ok?"면적 조건에 맞는 주택형이 없습니다.":`신혼희망타운 신청 불가 — ${elig.hope?.reason||"자격 확인"}`;
       if(dualOff&&counterpart)return "특공+일반 동시신청 옵션이 꺼져 있어 1장만 추천했습니다. 상세 모드 → 전략 설정에서 켤 수 있습니다.";
       const okTypes=specialTypes.filter(type=>elig[type]?.ok);
       if(!okTypes.length){
@@ -1338,15 +1377,24 @@
       return `자격 있는 특공(${okTypes.map(type=>R.TYPE_LABELS[type]).join("·")})에 진입 가능한 물량이 없거나 면적 조건에서 제외됐습니다.`;
     };
     const whyGeneral=(elig,counterpart)=>{
+      if(R.isHopeTownNotice(notice))return "신혼희망타운은 일반공급 없이 신혼부부 대상 전량 공급입니다.";
       if(dualOff&&counterpart)return "특공+일반 동시신청 옵션이 꺼져 있어 1장만 추천했습니다. 상세 모드 → 전략 설정에서 켤 수 있습니다.";
       if(!elig.general.ok)return `${notice.remainder?"신청 자격 미충족":"일반공급 1순위 요건 미충족"} — ${elig.general.reason}`;
       return "자격은 충족하지만 최소 면적 조건에 맞는 일반공급 물량이 없습니다.";
     };
+    const specialLabel=R.isHopeTownNotice(notice)?"신혼희망타운":"특별공급";
     const picks=[
-      {key:"a",person:"나",label:"특별공급",row:plans.a.special,why:()=>whySpecial(eligA,plans.a.general)},
+      {key:"a",person:"나",label:specialLabel,row:plans.a.special,why:()=>whySpecial(eligA,plans.a.general)},
       {key:"a",person:"나",label:"일반공급",row:plans.a.general,why:()=>whyGeneral(eligA,plans.a.special)},
-      ...(plans.useB?[{key:"b",person:"배우자",label:"특별공급",row:plans.b.special,why:()=>whySpecial(eligB,plans.b.general)},{key:"b",person:"배우자",label:"일반공급",row:plans.b.general,why:()=>whyGeneral(eligB,plans.b.special)}]:[])
+      ...(plans.useB?[{key:"b",person:"배우자",label:specialLabel,row:plans.b.special,why:()=>whySpecial(eligB,plans.b.general)},{key:"b",person:"배우자",label:"일반공급",row:plans.b.general,why:()=>whyGeneral(eligB,plans.b.special)}]:[])
     ];
+    if(!picks.some(pick=>pick.row)&&R.isHopeTownNotice(notice)){
+      const line=(label,elig)=>elig?`<li><b>${label}</b> — ${esc(elig.hope?.reason||"자격 확인 필요")}</li>`:"";
+      const warn=[...new Set([...(eligA.hope?.warnings||[]),...(eligB?.hope?.warnings||[])])].filter(w=>/총자산|소득/.test(w));
+      $("quickResult").innerHTML=`<div class="quick-empty"><b>이 신혼희망타운에는 신청할 수 없습니다.</b><ul class="hope-reasons">${line("나",eligA)}${line("배우자",eligB)}</ul><small>기준: 소득 130%(맞벌이 200%, 가점제 1·2단계는 140%) 이하 · 총자산 3.62억(출산 자녀 1명 3.97억, 2명 이상 4.31억) 이하 · 혼인 7년 이내 또는 6세 이하 자녀 · 무주택${warn.length?`<br>⚠ ${esc(warn.join(" / "))}`:""}</small></div>`;
+      if($("quickPlanSub"))$("quickPlanSub").textContent=`${notice.projectName||"공고"} · 신청 불가`;
+      return;
+    }
     if(!picks.some(pick=>pick.row)){
       $("quickResult").innerHTML=`<div class="quick-empty"><b>현재 입력으로 신청 가능한 유형이 없습니다.</b><br>통장 가입일(일반 1순위는 보통 24개월), 무주택 체크, 생년월일이 채워졌는지 확인해 주세요. 세부 요건(예치금·재당첨 제한 등)은 상세 모드의 '자격 체크' 표에서 확인할 수 있습니다.</div>`;
       return;
@@ -1365,7 +1413,7 @@
       else badge=`<span class="fund-badge ok">자금 가능 · 여유 ${formatWonShort(plan.finalSurplus)}</span>`;
       if(plan){
         const haveTotal=plan.ownCapitalAtMoveIn+plan.mortgageTarget;
-        detail=`<details class="portfolio-funding"><summary>자금 계산 근거 보기</summary><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세·기타</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>입주까지 저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>예상 대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div>${quickAfterPlan(plan)}</details>`;
+        detail=`<details class="portfolio-funding"><summary>자금 계산 근거 보기</summary><div class="fund-cols"><div class="fund-col need"><h5>필요 ${formatWonShort(plan.totalCost)}</h5><ul><li><span>분양가</span><b>${formatWonShort(plan.price)}</b></li><li><span>취득세·기타</span><b>${formatWonShort(plan.extras)}</b></li>${plan.totalInterimInterest?`<li><span>중도금 이자</span><b>${formatWonShort(plan.totalInterimInterest)}</b></li>`:""}</ul></div><div class="fund-col have"><h5>투입 ${formatWonShort(haveTotal)}</h5><ul><li><span>현금</span><b>${formatWonShort(plan.usableStart)}</b></li><li><span>입주까지 저축</span><b>${formatWonShort(plan.grossSavingToMoveIn)}</b></li><li><span>예상 대출한도</span><b>${formatWonShort(plan.mortgageTarget)}</b></li></ul></div></div>${quickAfterPlan(plan)}${row.type==="hope"?hopeMortgageHtml(plan.price):""}</details>`;
       }
       return `<div class="portfolio-app"><div class="portfolio-app-person ${pick.key}"><small>${esc(pick.person)} · ${esc(pick.label)}</small><b>${esc(R.TYPE_LABELS[row.type])}</b></div><div class="portfolio-app-main"><div class="portfolio-app-title"><b>${esc(row.size)} 주택형</b>${badge}</div><div class="portfolio-badges"><span class="data-source-badge ${source.cls}">${source.label}</span><span>${esc(chanceLabel(row))}</span></div><small><b>추천 근거</b> · ${esc(row.seatText)} · ${esc(row.reasons.slice(1,4).join(" · "))}</small>${detail}</div></div>`;
     }).join("");
@@ -1973,7 +2021,7 @@
         announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
         rceptStart:R.normalizeDate(applyhomeVal(detail,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),rceptEnd:R.normalizeDate(applyhomeVal(detail,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),
         pblancUrl:String(applyhomeVal(detail,"PBLANC_URL")||""),
-        housingType:/국민/.test(String(applyhomeVal(detail,"HOUSE_DTL_SECD_NM","HOUSE_SECD_NM")))?"public":"private",supplyKind,priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
+        housingType:/국민/.test(String(applyhomeVal(detail,"HOUSE_DTL_SECD_NM","HOUSE_SECD_NM")))?"public":"private",supplyKind,hopeTown:/신혼희망타운/.test(String(applyhomeVal(detail,"HOUSE_SECD_NM"))+String(applyhomeVal(detail,"HOUSE_NM"))),priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
         specialMonths:6,generalMonths:remainder?0:24,generalHeadRequired:remainder?"no":overheated||adjusted?"yes":"no",
         pointRates:remainder?{small:0,medium:0,large:0}:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
         verified:false,sourceFile:"청약홈 API 자동 구성",parseConfidence:70,
