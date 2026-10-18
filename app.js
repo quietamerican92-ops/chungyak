@@ -1042,7 +1042,7 @@
     const shortRegion=token=>token.replace(/^(.)[^\s]*?(남|북)도$/,"$1$2").replace(/(특별자치시|특별자치도|특별시|광역시|도)$/,"");
     const tokens=String(notice.location||"").trim().split(/\s+/).filter(Boolean);
     const area=tokens.length?[shortRegion(tokens[0]),tokens[1]||""].filter(Boolean).join(" "):"";
-    const kind=notice.remainder?"무순위":notice.housingType==="public"?"공공분양":"민영";
+    const kind=notice.remainder?(notice.supplyKind||"무순위"):notice.housingType==="public"?"공공분양":"민영";
     const fmt=date=>{const d=R.normalizeDate(date);return d?d.slice(5).replace("-","."):""};
     const status=notice.rceptStart?liveStatus({start:R.normalizeDate(notice.rceptStart),end:R.normalizeDate(notice.rceptEnd)||R.normalizeDate(notice.rceptStart),announce:R.normalizeDate(notice.announceDate)}).label
       :notice.announceDate?`발표 ${fmt(notice.announceDate)}`:notice.noticeDate?`공고 ${R.normalizeDate(notice.noticeDate).replace(/-/g,".")}`:"";
@@ -1541,7 +1541,7 @@
       }
       if(!cmpet.length&&!spsply.length){
         const remndr=await fetchOp("getRemndrLttotPblancCmpet");
-        cmpet=remndr||[];
+        cmpet=remndr&&remndr.length?remndr:(await fetchOp("getOPTLttotPblancCmpet"))||[];
       }
       const generalPending=!cmpet.length&&spsply.length>0;
       // 일반 결과가 비었으면 공고 상세에서 접수 일정을 가져와 "왜 아직 없는지" 알려준다
@@ -1823,14 +1823,17 @@
     if(cached&&cached.date===today&&Array.isArray(cached.rows)&&cached.rows.length){liveNotices=cached.rows;startLiveRotation();return}
     try{
       const since=addDaysStr(-80);
-      const fetchArea=(op,area)=>applyhomeGet(`${APPLYHOME_DETAIL_BASE}/${op}?page=1&perPage=100&serviceKey=${encodeURIComponent(key)}&cond%5BSUBSCRPT_AREA_CODE_NM%3A%3AEQ%5D=${encodeURIComponent(area)}&cond%5BRCRIT_PBLANC_DE%3A%3AGTE%5D=${since}`).then(data=>data.data||[]).catch(()=>[]);
-      const [seoul,gyeonggi,seoulR,gyeonggiR]=await Promise.all([
+      // 임의공급(OPT) 목록은 날짜를 하이픈 없이(20261014) 저장해서 비교 기준도 같은 형식으로 맞춘다
+      const fetchArea=(op,area,compact=false)=>applyhomeGet(`${APPLYHOME_DETAIL_BASE}/${op}?page=1&perPage=100&serviceKey=${encodeURIComponent(key)}&cond%5BSUBSCRPT_AREA_CODE_NM%3A%3AEQ%5D=${encodeURIComponent(area)}&cond%5BRCRIT_PBLANC_DE%3A%3AGTE%5D=${compact?since.replace(/-/g,""):since}`).then(data=>data.data||[]).catch(()=>[]);
+      const [seoul,gyeonggi,seoulR,gyeonggiR,seoulO,gyeonggiO]=await Promise.all([
         fetchArea("getAPTLttotPblancDetail","서울"),fetchArea("getAPTLttotPblancDetail","경기"),
-        fetchArea("getRemndrLttotPblancDetail","서울"),fetchArea("getRemndrLttotPblancDetail","경기")
+        fetchArea("getRemndrLttotPblancDetail","서울"),fetchArea("getRemndrLttotPblancDetail","경기"),
+        fetchArea("getOPTLttotPblancDetail","서울",true),fetchArea("getOPTLttotPblancDetail","경기",true)
       ]);
       const statusOrder={open:0,soon:1,closed:2};
-      const mapRow=(row,kind)=>({no:String(applyhomeVal(row,"HOUSE_MANAGE_NO")),name:String(applyhomeVal(row,"HOUSE_NM")),kind,area:String(applyhomeVal(row,"SUBSCRPT_AREA_CODE_NM")),notice:String(applyhomeVal(row,"RCRIT_PBLANC_DE")),start:String(applyhomeVal(row,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),end:String(applyhomeVal(row,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),announce:String(applyhomeVal(row,"PRZWNER_PRESNATN_DE"))});
-      liveNotices=[...seoul.map(row=>mapRow(row,"")),...gyeonggi.map(row=>mapRow(row,"")),...seoulR.map(row=>mapRow(row,"무순위")),...gyeonggiR.map(row=>mapRow(row,"무순위"))]
+      const day=value=>R.normalizeDate(String(value||""))||String(value||"");
+      const mapRow=(row,kind)=>({no:String(applyhomeVal(row,"HOUSE_MANAGE_NO")),name:String(applyhomeVal(row,"HOUSE_NM")),kind,area:String(applyhomeVal(row,"SUBSCRPT_AREA_CODE_NM")),notice:day(applyhomeVal(row,"RCRIT_PBLANC_DE")),start:day(applyhomeVal(row,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),end:day(applyhomeVal(row,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),announce:day(applyhomeVal(row,"PRZWNER_PRESNATN_DE"))});
+      liveNotices=[...seoul.map(row=>mapRow(row,"")),...gyeonggi.map(row=>mapRow(row,"")),...seoulR.map(row=>mapRow(row,"무순위")),...gyeonggiR.map(row=>mapRow(row,"무순위")),...seoulO.map(row=>mapRow(row,"임의공급")),...gyeonggiO.map(row=>mapRow(row,"임의공급"))]
         .filter(row=>row.no&&(row.end>=today||row.notice>=addDaysStr(-35)))
         .sort((a,b)=>statusOrder[liveStatus(a).cls]-statusOrder[liveStatus(b).cls]||String(a.end).localeCompare(String(b.end)));
       localStorage.setItem(LIVE_CACHE_KEY,JSON.stringify({date:today,rows:liveNotices}));
@@ -1868,7 +1871,7 @@
       return `<button type="button" class="live-item ${newNoticeIds.has(row.no)?"is-new":""}" data-live-house="${esc(row.no)}"><span class="live-status ${status.cls}">${esc(status.label)}</span><b>${newNoticeIds.has(row.no)?'<i class="live-new">NEW</i> ':""}${esc(row.name)}${row.kind?` <i class="live-kind">${esc(row.kind)}</i>`:""}</b><small>${esc(row.area)} · 공고 ${esc(row.notice)}${row.announce?` · 발표 ${esc(row.announce)}`:""}</small></button>`;
     }).join(""):`<div class="live-empty">표시할 공고가 없습니다. 인증키 등록 후 새로고침해 주세요.</div>`;
     const notifyState=!("Notification"in window)?"":Notification.permission==="granted"?`<small class="notify-on">🔔 새 공고 알림 켜짐 — 앱을 열 때 지난 방문 이후 올라온 공고를 알려드립니다</small>`:`<button type="button" id="notifyEnable">🔔 새 공고 알림 켜기</button>`;
-    $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><div class="live-foot-row"><button type="button" id="liveRefresh">목록 지금 새로고침</button>${notifyState}</div><small>공공데이터 API는 청약홈 사이트 게시보다 최대 하루가량 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
+    $("liveBannerList").innerHTML=items+`<div class="live-list-foot"><div class="live-foot-row"><button type="button" id="liveRefresh">목록 지금 새로고침</button>${notifyState}</div><small>공공데이터 API는 청약홈 사이트 게시보다 늦게 반영될 수 있습니다. 방금 올라온 공고는 PDF 업로드로 먼저 분석하세요.</small></div>`;
   }
   function apiTypeName(raw){const match=String(raw).trim().match(/^0*(\d+)\.\d+\s*([A-Z]*)$/);return match?String(Number(match[1]))+(match[2]||""):String(raw).trim()}
   function apiSizeFromMdl(m){
@@ -1886,6 +1889,7 @@
     const fetchMdl=op=>applyhomeGet(`${APPLYHOME_DETAIL_BASE}/${op}?page=1&perPage=100&serviceKey=${encodeURIComponent(key)}${cond}`).then(data=>data.data||[]).catch(()=>null);
     let mdl=await fetchMdl("getAPTLttotPblancMdl");
     if(mdl&&!mdl.length)mdl=await fetchMdl("getRemndrLttotPblancMdl");
+    if(mdl&&!mdl.length)mdl=await fetchMdl("getOPTLttotPblancMdl");
     if(mdl===null){target.supplyCheck=null;return {status:"skip",message:"청약홈 연결에 실패해 물량 대조를 못 했습니다(PDF 값 사용)."}}
     if(!mdl.length){target.supplyCheck={house,at:todayStr(),status:"missing",diffs:[],notes:[]};return {status:"skip",message:`청약홈에 아직 이 공고(${house})의 주택형별 물량이 없어 PDF 값을 그대로 씁니다.`}}
     const api=mdl.map(m=>({...apiSizeFromMdl(m),price:num(m.LTTOT_TOP_AMOUNT)*10000}));
@@ -1934,9 +1938,16 @@
       };
       let remainder=false;
       let {detail,mdl}=await tryOps("getAPTLttotPblancDetail","getAPTLttotPblancMdl");
+      let supplyKind="";
       if(!detail||!mdl.length){
         ({detail,mdl}=await tryOps("getRemndrLttotPblancDetail","getRemndrLttotPblancMdl"));
         remainder=Boolean(detail&&mdl.length);
+        if(remainder)supplyKind="무순위";
+      }
+      if(!detail||!mdl.length){
+        ({detail,mdl}=await tryOps("getOPTLttotPblancDetail","getOPTLttotPblancMdl"));
+        remainder=Boolean(detail&&mdl.length);
+        if(remainder)supplyKind="임의공급";
       }
       if(!detail||!mdl.length){toast("공고 상세를 불러오지 못했습니다. PDF 업로드를 이용해 주세요.");return}
       const typeName=apiTypeName;
@@ -1962,7 +1973,7 @@
         announceDate:R.normalizeDate(applyhomeVal(detail,"PRZWNER_PRESNATN_DE")),
         rceptStart:R.normalizeDate(applyhomeVal(detail,"RCEPT_BGNDE","SUBSCRPT_RCEPT_BGNDE")),rceptEnd:R.normalizeDate(applyhomeVal(detail,"RCEPT_ENDDE","SUBSCRPT_RCEPT_ENDDE")),
         pblancUrl:String(applyhomeVal(detail,"PBLANC_URL")||""),
-        housingType:/국민/.test(String(applyhomeVal(detail,"HOUSE_DTL_SECD_NM","HOUSE_SECD_NM")))?"public":"private",priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
+        housingType:/국민/.test(String(applyhomeVal(detail,"HOUSE_DTL_SECD_NM","HOUSE_SECD_NM")))?"public":"private",supplyKind,priorityRegion:areaName==="서울"?"서울특별시":areaName==="경기"?"경기도":areaName,priorityYears:remainder?0:2,remainder,
         specialMonths:6,generalMonths:remainder?0:24,generalHeadRequired:remainder?"no":overheated||adjusted?"yes":"no",
         pointRates:remainder?{small:0,medium:0,large:0}:overheated?{small:40,medium:70,large:80}:adjusted?{small:40,medium:70,large:50}:{small:40,medium:40,large:0},
         verified:false,sourceFile:"청약홈 API 자동 구성",parseConfidence:70,
